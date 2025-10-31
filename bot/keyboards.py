@@ -6,8 +6,14 @@ from typing import Iterable
 def main_menu() -> ReplyKeyboardMarkup:
 	return ReplyKeyboardMarkup(
 		keyboard=[
-			[KeyboardButton(text="🎰 Сделать ставку"), KeyboardButton(text="🏆 Рейтинг")],
-			[KeyboardButton(text="🎁 Промокод")],
+			[
+				KeyboardButton(text="🎰 Сделать ставку"),
+				KeyboardButton(text="🏆 Рейтинг"),
+			],
+			[
+				KeyboardButton(text="📊 Мой рейтинг"),
+				KeyboardButton(text="🎁 Промокод"),
+			],
 		],
 		resize_keyboard=True,
 		input_field_placeholder="Выберите действие",

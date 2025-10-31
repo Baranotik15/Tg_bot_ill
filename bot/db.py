@@ -127,7 +127,6 @@ async def init_db(database_url: str) -> None:
 		await conn.run_sync(Base.metadata.create_all)
 
 
-# Helper queries
 async def get_or_create_user(tg_id: int, username: Optional[str], init_points: int) -> User:
 	assert AsyncSessionLocal is not None
 	async with AsyncSessionLocal() as session:
@@ -136,9 +135,8 @@ async def get_or_create_user(tg_id: int, username: Optional[str], init_points: i
 		)
 		row = result.first()
 		if row:
-			# Re-map to ORM instance
-			user = await session.get(User, row[0].id)  # type: ignore[attr-defined]
-			return user  # type: ignore[return-value]
+			user = await session.get(User, row[0])
+			return user
 		user = User(tg_id=tg_id, username=username, balance=init_points)
 		session.add(user)
 		await session.commit()
