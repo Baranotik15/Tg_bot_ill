@@ -1,23 +1,27 @@
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from typing import Iterable
+from bot import context
 
 
-def main_menu() -> ReplyKeyboardMarkup:
-	return ReplyKeyboardMarkup(
-		keyboard=[
-			[
-				KeyboardButton(text="🎰 Сделать ставку"),
-				KeyboardButton(text="🏆 Рейтинг"),
-			],
-			[
-				KeyboardButton(text="📊 Мой рейтинг"),
-				KeyboardButton(text="🎁 Промокод"),
-			],
-		],
-		resize_keyboard=True,
-		input_field_placeholder="Выберите действие",
-	)
+def main_menu(user_id: int) -> ReplyKeyboardMarkup:
+    """
+    Формируем основное меню. Если пользователь админ — добавляем кнопку "Создать промокод".
+    """
+    buttons = [
+        [KeyboardButton(text="🎰 Сделать ставку"), KeyboardButton(text="🏆 Рейтинг")],
+        [KeyboardButton(text="📊 Мой рейтинг"), KeyboardButton(text="🎁 Промокод")],
+    ]
+
+    settings = context.settings
+    if settings and user_id in settings.admin_ids:
+        buttons.append([KeyboardButton(text="💳 Создать промокод")])
+
+    return ReplyKeyboardMarkup(
+        keyboard=buttons,
+        resize_keyboard=True,
+        input_field_placeholder="Выберите действие",
+    )
 
 
 def events_inline(events: Iterable[tuple[int, str]]) -> InlineKeyboardMarkup:

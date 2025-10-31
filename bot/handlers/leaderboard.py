@@ -6,15 +6,13 @@ from sqlalchemy import desc, select, func
 import bot.db as db
 from bot.db import User
 
-
 router = Router()
 
 
 @router.message(Command("top"))
 @router.message(F.text == "🏆 Рейтинг")
 async def cmd_top(message: Message) -> None:
-    assert db.AsyncSessionLocal is not None
-    async with db.AsyncSessionLocal() as session:
+    async with db.get_session()() as session:
         result = await session.execute(
             User.__table__.select().order_by(desc(User.balance)).limit(20)
         )
@@ -29,10 +27,9 @@ async def cmd_top(message: Message) -> None:
 @router.message(Command("me"))
 @router.message(F.text == "📊 Мой рейтинг")
 async def cmd_me(message: Message) -> None:
-    assert db.AsyncSessionLocal is not None
     tg_id = message.from_user.id
 
-    async with db.AsyncSessionLocal() as session:
+    async with db.get_session()() as session:
         result = await session.execute(select(User).where(User.tg_id == tg_id))
         user = result.scalar_one_or_none()
 

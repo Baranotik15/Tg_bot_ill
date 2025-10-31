@@ -11,10 +11,10 @@ from bot.db import init_db
 from bot.handlers.start import router as start_router
 from bot.handlers.leaderboard import router as leaderboard_router
 from bot.handlers.promo import router as promo_router
-from bot.handlers.betting import router as betting_router
 from bot.handlers.admin import router as admin_router
 from bot.scheduler import hourly_dump
 from bot import context
+from bot.handlers.admin_promo import router as admin_promo_router
 
 
 async def main() -> None:
@@ -43,8 +43,8 @@ async def main() -> None:
 	dp.include_router(start_router)
 	dp.include_router(leaderboard_router)
 	dp.include_router(promo_router)
-	dp.include_router(betting_router)
 	dp.include_router(admin_router)
+	dp.include_router(admin_promo_router)
 
 	# Hourly dump task
 	asyncio.create_task(hourly_dump(settings))

@@ -25,5 +25,5 @@ async def cmd_start(message: Message) -> None:
 			f"На твоём счету: {user.balance} баллов.\n\n"
 			"Выбирай действие из меню ниже."
 		),
-		reply_markup=main_menu(),
+		reply_markup=main_menu(message.from_user.id),
 	)
