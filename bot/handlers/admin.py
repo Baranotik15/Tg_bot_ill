@@ -3,7 +3,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from bot.db import Outcome, PromoCode, AsyncSessionLocal
+from bot.db import PromoCode, AsyncSessionLocal
 from bot import context
 from sqlalchemy import select
 

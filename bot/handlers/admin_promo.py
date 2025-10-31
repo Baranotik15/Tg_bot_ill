@@ -30,7 +30,7 @@ async def btn_create_promo(message: Message) -> None:
 @router.message(F.text.regexp(r"^[A-Za-z0-9_-]{3,64} \d+(\s\d+)?(\s\d+)?$"))
 async def create_promo_from_text(message: Message) -> None:
     if not is_admin(message.from_user.id):
-        return  # игнорируем сообщения обычных пользователей
+        return
 
     parts = message.text.split()
     code = parts[0]
