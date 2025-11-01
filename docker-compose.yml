@@ -1,0 +1,15 @@
+services:
+  tg_bot:
+    build: .
+    container_name: tg_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on: []
+
+volumes:
+  bot_data:
+  bot_logs:

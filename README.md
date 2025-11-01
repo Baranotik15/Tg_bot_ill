@@ -42,6 +42,48 @@ python -m bot.main
 Админ-команды:
 - `💳 Создать промокод` — применить промокод напрямую
 
+
+# 🚀 Развёртывание Telegram-бота в Docker
+### 📦 Требования
+
+Перед началом убедись, что установлены:
+
+Docker Desktop → https://www.docker.com/products/docker-desktop
+
+## 1. Сборка Docker-образа
+
+```bash
+docker-compose build
+```
+
+## 2. Запуск контейнера в фоне
+
+```bash
+docker-compose up -d
+```
+
+🧩 Остановка и перезапуск бота
+
+## Остановить контейнер
+
+```bash
+docker-compose down
+```
+
+## Перезапустить с пересборкой образа
+
+```bash
+docker-compose build
+```
+
+## ✅ Проверка работы
+
+Чтобы убедиться, что бот запущен:
+
+```bash
+docker logs -f tg_bot
+```
+
 ### Примечания
 - Дамп БД выполняется каждый час, файлы `db_YYYYmmdd_HHMMSS.sqlite` сохраняются в `dumps/`.
 - Логи сохраняются в `logs/bot.log` с ротацией, хранится 7 последних файлов.
