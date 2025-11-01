@@ -15,7 +15,7 @@ async def hourly_dump(settings: Settings) -> None:
 	while True:
 		try:
 			if os.path.exists(path):
-				ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+				ts = datetime.utcnow().strftime("%Y_%m_%d_%H_%M_%S")
 				filename = f"db_{ts}.sqlite"
 				target = os.path.join(settings.dump_dir, filename)
 				shutil.copyfile(path, target)

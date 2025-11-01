@@ -8,8 +8,10 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./dumps:/app/dumps
     depends_on: []
 
 volumes:
   bot_data:
   bot_logs:
+  bot_dumps:
