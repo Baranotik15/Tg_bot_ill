@@ -3,6 +3,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from bot.db import get_or_create_user, redeem_promo
+from bot.utils.logger import audit
 from bot import context
 
 router = Router()
@@ -33,6 +34,7 @@ async def any_code_text(message: Message) -> None:
 async def handle_promo_code(message: Message, code: str) -> None:
     try:
         settings = context.settings
+        logger = context.logger
         assert settings is not None
 
         user = await get_or_create_user(
@@ -42,7 +44,17 @@ async def handle_promo_code(message: Message, code: str) -> None:
         )
 
         added = await redeem_promo(user.id, code)
+
+        audit(logger, "promo_redeemed", {
+            "user_id": user.id,
+            "tg_id": message.from_user.id,
+            "username": message.from_user.username,
+            "promo_code": code,
+            "points_added": added,
+        })
+
         await message.answer(f"🎉 Промокод применён! Начислено {added} баллов.")
+
     except ValueError as e:
         await message.answer(f"❌ {e}")
     except Exception as e:

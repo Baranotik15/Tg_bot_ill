@@ -1,7 +1,8 @@
 from aiogram import Router, F
 from aiogram.types import Message
 from bot import context
-from bot.db import PromoCode, get_session  # используем get_session
+from bot.db import PromoCode, get_session
+from bot.utils.logger import audit
 from sqlalchemy import select
 from datetime import datetime, timedelta
 
@@ -45,9 +46,25 @@ async def create_promo_from_text(message: Message) -> None:
             await message.answer(f"Промокод {code} уже существует!")
             return
 
-        promo = PromoCode(code=code, amount=amount, uses_left=uses, expires_at=expires_at)
+        promo = PromoCode(
+            code=code,
+            amount=amount,
+            uses_left=uses,
+            expires_at=expires_at
+        )
         session.add(promo)
         await session.commit()
+
+    logger = context.logger
+    audit(logger, "promo_created", {
+        "admin_tg_id": message.from_user.id,
+        "admin_username": message.from_user.username,
+        "promo_code": code,
+        "amount": amount,
+        "uses": uses,
+        "days": days,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+    })
 
     await message.answer(
         f"✅ Промокод {code} создан!\n"
