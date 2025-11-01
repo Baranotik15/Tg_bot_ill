@@ -13,7 +13,8 @@ from bot.handlers.leaderboard import router as leaderboard_router
 from bot.handlers.promo import router as promo_router
 from bot.scheduler import hourly_dump
 from bot import context
-from bot.handlers.admin_promo import router as admin_promo_router
+from bot.handlers.admin import router as admin_router
+from bot.handlers import betting
 
 
 async def main() -> None:
@@ -37,12 +38,15 @@ async def main() -> None:
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
-    dp = Dispatcher()
 
+    context.bot = bot
+
+    dp = Dispatcher()
     dp.include_router(start_router)
     dp.include_router(leaderboard_router)
     dp.include_router(promo_router)
-    dp.include_router(admin_promo_router)
+    dp.include_router(admin_router)
+    dp.include_router(betting.router)
 
     asyncio.create_task(hourly_dump(settings))
 
