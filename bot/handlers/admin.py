@@ -1,8 +1,7 @@
 from aiogram import Router, F
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from bot import context
 from bot.db import PromoCode, get_session, Event, EventStatus, User
-from bot.utils.logger import audit
 from sqlalchemy import select
 from datetime import datetime, timedelta
 
@@ -48,9 +47,7 @@ async def create_promo_from_text(message: Message) -> None:
     expires_at = datetime.utcnow() + timedelta(days=days) if days else None
 
     async with get_session()() as session:
-        existing = await session.execute(
-            select(PromoCode).where(PromoCode.code == code)
-        )
+        existing = await session.execute(select(PromoCode).where(PromoCode.code == code))
         if existing.scalar_one_or_none():
             await message.answer(f"Промокод {code} уже существует!")
             return
@@ -64,21 +61,6 @@ async def create_promo_from_text(message: Message) -> None:
         session.add(promo)
         await session.commit()
 
-    logger = context.logger
-    audit(
-        logger,
-        "promo_created",
-        {
-            "admin_tg_id": message.from_user.id,
-            "admin_username": message.from_user.username,
-            "promo_code": code,
-            "amount": amount,
-            "uses": uses,
-            "days": days,
-            "expires_at": expires_at.isoformat() if expires_at else None,
-        }
-    )
-
     context.creating_promo[message.from_user.id] = False
 
     await message.answer(
@@ -91,6 +73,7 @@ async def create_promo_from_text(message: Message) -> None:
 
 @router.message(F.text == "⚡ Начать событие")
 async def start_event_btn(message: Message):
+    """Старт создания события (через обычную кнопку)"""
     if not is_admin(message.from_user.id):
         await message.answer("Недостаточно прав.")
         return
@@ -135,27 +118,20 @@ async def set_coefficient(message: Message):
         f"Черные: X{user_event['black_coef']}"
     )
 
-    audit(
-        context.logger,
-        "event_created",
-        {
-            "admin_tg_id": message.from_user.id,
-            "admin_username": message.from_user.username,
-            "red_coef": user_event['red_coef'],
-            "black_coef": user_event['black_coef'],
-            "event_name": event.name
-        }
-    )
-
     async with get_session()() as session:
         users = await session.execute(select(User))
         users = users.scalars().all()
+
         for u in users:
             try:
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="Красные", callback_data=f"bet_red:{event.id}"),
-                    InlineKeyboardButton(text="Черные", callback_data=f"bet_black:{event.id}")
-                ]])
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="🔴 Красные", callback_data=f"bet_red:{event.id}"),
+                            InlineKeyboardButton(text="⚫ Черные", callback_data=f"bet_black:{event.id}")
+                        ]
+                    ]
+                )
                 await context.bot.send_message(
                     u.tg_id,
                     f"🎲 Начался матч!\nВыберите команду для ставки:",

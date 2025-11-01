@@ -8,7 +8,6 @@ from bot import context
 
 router = Router()
 
-# Пользователи, ожидающие ввода промокода
 if not hasattr(context, "waiting_for_promo"):
     context.waiting_for_promo = set()
 
@@ -16,14 +15,17 @@ if not hasattr(context, "waiting_for_promo"):
 @router.message(Command("promo"))
 @router.message(F.text == "🎁 Промокод")
 async def cmd_promo(message: Message) -> None:
-    """Пользователь нажал кнопку или вызвал команду промокода."""
-    context.waiting_for_promo.add(message.from_user.id)
+    user_id = message.from_user.id
+    context.waiting_for_promo.add(user_id)
     await message.answer("Отправьте промокод одним сообщением (или используйте: /use CODE)")
 
 
 @router.message(Command("use"))
 async def cmd_use(message: Message) -> None:
-    """Команда /use для ввода кода прямо в сообщении."""
+    user_id = message.from_user.id
+    if user_id in context.waiting_for_promo:
+        context.waiting_for_promo.remove(user_id)
+
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2:
         await message.answer("Укажите код: /use CODE")
@@ -34,19 +36,17 @@ async def cmd_use(message: Message) -> None:
 
 @router.message(F.text.regexp(r"^[A-Za-z0-9_-]{3,64}$"))
 async def any_code_text(message: Message) -> None:
-    """Ловим код только если пользователь нажал кнопку или вызвал /promo."""
     user_id = message.from_user.id
     if user_id not in context.waiting_for_promo:
-        return  # Игнорируем обычные сообщения
+        return
     code = (message.text or "").strip()
     await handle_promo_code(message, code)
 
 
 async def handle_promo_code(message: Message, code: str) -> None:
-    """Обработка введенного промокода."""
     user_id = message.from_user.id
     if user_id in context.waiting_for_promo:
-        context.waiting_for_promo.remove(user_id)  # Убираем флаг
+        context.waiting_for_promo.remove(user_id)
 
     try:
         settings = context.settings
@@ -73,6 +73,17 @@ async def handle_promo_code(message: Message, code: str) -> None:
 
     except ValueError as e:
         await message.answer(f"❌ {e}")
-    except Exception as e:
+    except Exception:
         await message.answer("❌ Не удалось применить промокод. Попробуйте позже.")
-        print(e)
+
+
+@router.message(F.text & ~F.text.in_({"🎁 Промокод"}))
+@router.callback_query()
+async def reset_promo_wait(message_or_callback):
+    user_id = (
+        message_or_callback.from_user.id
+        if hasattr(message_or_callback, "from_user")
+        else None
+    )
+    if user_id and user_id in context.waiting_for_promo:
+        context.waiting_for_promo.remove(user_id)

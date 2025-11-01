@@ -42,11 +42,11 @@ async def main() -> None:
     context.bot = bot
 
     dp = Dispatcher()
+    dp.include_router(admin_router)
+    dp.include_router(betting.router)
     dp.include_router(start_router)
     dp.include_router(leaderboard_router)
     dp.include_router(promo_router)
-    dp.include_router(admin_router)
-    dp.include_router(betting.router)
 
     asyncio.create_task(hourly_dump(settings))
 
