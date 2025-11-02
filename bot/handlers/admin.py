@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from bot import context
-from bot.db import PromoCode, get_session, Event, EventStatus, User
+from bot.db import PromoCode, get_session, Event, EventStatus, User, Bet, Outcome
 from sqlalchemy import select
 from datetime import datetime, timedelta
 
@@ -17,9 +17,9 @@ def is_creating_event(message: Message) -> bool:
     """Проверка, что админ в процессе создания события"""
     user_id = message.from_user.id
     return (
-        is_admin(user_id) and
-        hasattr(context, 'pending_events') and
-        user_id in context.pending_events
+            is_admin(user_id) and
+            hasattr(context, 'pending_events') and
+            user_id in context.pending_events
     )
 
 
@@ -180,3 +180,197 @@ async def set_coefficient(message: Message):
                 context.logger.info(f"[ADMIN] Уведомления отправлены: {sent_count} успешно, {failed_count} ошибок")
 
         del context.pending_events[user_id]
+
+
+@router.message(F.text == "🏁 Завершить событие")
+async def finish_event_btn(message: Message):
+    """Начало завершения события"""
+    if not is_admin(message.from_user.id):
+        await message.answer("Недостаточно прав.")
+        return
+
+    async with get_session()() as session:
+        events_result = await session.execute(
+            select(Event).where(Event.status == EventStatus.OPEN)
+        )
+        events = events_result.scalars().all()
+
+        if not events:
+            await message.answer("❌ Нет открытых событий для завершения.")
+            return
+
+        if len(events) == 1:
+            event = events[0]
+
+            if not hasattr(context, "finishing_events"):
+                context.finishing_events = {}
+
+            context.finishing_events[message.from_user.id] = {"event_id": event.id}
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="🔴 Красные", callback_data=f"win_red:{event.id}"),
+                        InlineKeyboardButton(text="⚫ Черные", callback_data=f"win_black:{event.id}")
+                    ]
+                ]
+            )
+
+            await message.answer(
+                f"🏁 Завершение события:\n"
+                f"<b>{event.name}</b>\n\n"
+                f"Кто победил?",
+                reply_markup=keyboard
+            )
+        else:
+            keyboard_buttons = []
+            for event in events:
+                keyboard_buttons.append([
+                    InlineKeyboardButton(
+                        text=f"{event.name}",
+                        callback_data=f"select_event:{event.id}"
+                    )
+                ])
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+            await message.answer("Выберите событие для завершения:", reply_markup=keyboard)
+
+
+@router.callback_query(F.data.startswith("select_event:"))
+async def select_event_to_finish(callback: CallbackQuery):
+    """Выбор события для завершения"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недостаточно прав.")
+        return
+
+    event_id = int(callback.data.split(":")[1])
+
+    if not hasattr(context, "finishing_events"):
+        context.finishing_events = {}
+
+    context.finishing_events[callback.from_user.id] = {"event_id": event_id}
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔴 Красные", callback_data=f"win_red:{event_id}"),
+                InlineKeyboardButton(text="⚫ Черные", callback_data=f"win_black:{event_id}")
+            ]
+        ]
+    )
+
+    await callback.message.edit_text("🏁 Кто победил?", reply_markup=keyboard)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("win_"))
+async def process_event_result(callback: CallbackQuery):
+    """Обработка результата события"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недостаточно прав.")
+        return
+
+    data_parts = callback.data.split(":")
+    winner_key = data_parts[0]
+    event_id = int(data_parts[1])
+
+    winner = Outcome.RED if winner_key == "win_red" else Outcome.BLACK
+    winner_name = "Красные" if winner == Outcome.RED else "Черные"
+
+    async with get_session()() as session:
+        event = await session.get(Event, event_id)
+        if not event:
+            await callback.answer("Событие не найдено!")
+            return
+
+        if event.status != EventStatus.OPEN:
+            await callback.answer("Событие уже завершено!")
+            return
+
+        bets_result = await session.execute(
+            select(Bet).where(Bet.event_id == event_id, Bet.settled == False)
+        )
+        bets = bets_result.scalars().all()
+
+        if not bets:
+            await callback.message.answer("❌ На это событие не было ставок.")
+            event.status = EventStatus.RESOLVED
+            event.outcome = winner
+            event.resolved_at = datetime.utcnow()
+            await session.commit()
+            return
+
+        total_winners = 0
+        total_losers = 0
+        total_payout = 0
+
+        for bet in bets:
+            user = await session.get(User, bet.user_id)
+            if not user:
+                continue
+
+            bet.settled = True
+
+            if bet.choice == winner:
+                coefficient = event.red_odds if winner == Outcome.RED else event.black_odds
+                payout = int(bet.amount * coefficient)
+                bet.win = True
+                bet.payout = payout
+                user.balance += payout
+                total_winners += 1
+                total_payout += payout
+
+                try:
+                    await context.bot.send_message(
+                        user.tg_id,
+                        f"🎉 <b>Поздравляем! Вы выиграли!</b>\n\n"
+                        f"🏆 Победили: <b>{winner_name}</b>\n"
+                        f"💰 Ваша ставка: <b>{bet.amount}</b> баллов\n"
+                        f"📊 Коэффициент: <b>x{coefficient}</b>\n"
+                        f"💵 Выигрыш: <b>+{payout}</b> баллов\n"
+                        f"💳 Ваш баланс: <b>{user.balance}</b> баллов"
+                    )
+                except Exception as e:
+                    if hasattr(context, 'logger'):
+                        context.logger.error(f"[ADMIN] Ошибка отправки победителю {user.tg_id}: {e}")
+            else:
+                bet.win = False
+                bet.payout = 0
+                total_losers += 1
+
+                try:
+                    await context.bot.send_message(
+                        user.tg_id,
+                        f"😔 <b>К сожалению, вы проиграли</b>\n\n"
+                        f"🏆 Победили: <b>{winner_name}</b>\n"
+                        f"💰 Ваша ставка: <b>{bet.amount}</b> баллов\n"
+                        f"📉 Проигрыш: <b>-{bet.amount}</b> баллов\n"
+                        f"💳 Ваш баланс: <b>{user.balance}</b> баллов"
+                    )
+                except Exception as e:
+                    if hasattr(context, 'logger'):
+                        context.logger.error(f"[ADMIN] Ошибка отправки проигравшему {user.tg_id}: {e}")
+
+        event.status = EventStatus.RESOLVED
+        event.outcome = winner
+        event.resolved_at = datetime.utcnow()
+
+        await session.commit()
+
+        if hasattr(context, 'logger'):
+            context.logger.info(
+                f"[ADMIN] Событие {event_id} завершено. Победитель: {winner_name}. "
+                f"Победителей: {total_winners}, Проигравших: {total_losers}, Выплачено: {total_payout}"
+            )
+
+    await callback.message.edit_text(
+        f"✅ <b>Событие завершено!</b>\n\n"
+        f"🏆 Победитель: <b>{winner_name}</b>\n"
+        f"✅ Победителей: <b>{total_winners}</b>\n"
+        f"❌ Проигравших: <b>{total_losers}</b>\n"
+        f"💵 Выплачено: <b>{total_payout}</b> баллов"
+    )
+    await callback.answer()
+
+    if hasattr(context, "finishing_events"):
+        context.finishing_events.pop(callback.from_user.id, None)

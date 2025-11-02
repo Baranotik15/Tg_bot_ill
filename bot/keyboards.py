@@ -15,7 +15,7 @@ def main_menu(user_id: int) -> ReplyKeyboardMarkup:
     if settings and user_id in settings.admin_ids:
         buttons.append([KeyboardButton(text="💳 Создать промокод")])
         buttons.append([KeyboardButton(text="⚡ Начать событие")])
-
+        buttons.append([KeyboardButton(text="🏁 Завершить событие")])
 
     return ReplyKeyboardMarkup(
         keyboard=buttons,
