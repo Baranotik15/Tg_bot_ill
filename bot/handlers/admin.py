@@ -138,8 +138,7 @@ async def handle_event_creation(message: Message):
 
             async with get_session()() as session:
                 now = datetime.utcnow()
-                betting_end_time = now + timedelta(minutes=10)  # 10 минут на ставки
-
+                betting_end_time = now + timedelta(minutes=10)
                 event = Event(
                     event_title=user_event['event_title'],
                     name=f"Ставка {now.strftime('%Y-%m-%d %H:%M:%S')}",
