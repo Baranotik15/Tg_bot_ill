@@ -5,7 +5,7 @@ from aiogram.types import Message
 from bot.db import get_or_create_user
 from bot.keyboards import main_menu
 from bot import context
-from bot.utils.logger import audit  # добавляем импорт
+from bot.utils.logger import audit
 
 
 router = Router()
@@ -22,7 +22,6 @@ async def cmd_start(message: Message) -> None:
         init_points=settings.init_points,
     )
 
-    # Логирование регистрации / входа
     audit(
         context.logger,
         "user_start",
@@ -37,9 +36,11 @@ async def cmd_start(message: Message) -> None:
 
     await message.answer(
         text=(
-            f"Привет, {message.from_user.full_name}!\n"
-            f"На твоём счету: {user.balance} баллов.\n\n"
-            "Выбирай действие из меню ниже."
+            "🃏 <b>Добро пожаловать в семью,</b>"
+            f" <b>{message.from_user.full_name}</b>! 🎭\n\n"
+            f"💸 <b>Твой баланс: <code>{user.balance}</code></b>️💰\n\n"
+            "🎰 Испытай удачу — сделай ставку и сорви куш!\n\n"
+            "⬇️ Выбирай действие ниже и начни игру"
         ),
         reply_markup=main_menu(message.from_user.id),
     )

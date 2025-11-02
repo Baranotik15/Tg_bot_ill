@@ -36,7 +36,8 @@ async def btn_create_promo(message: Message) -> None:
     await message.answer(
         "Чтобы создать промокод, отправьте его в формате:\n"
         "`CODE AMOUNT [USES] [DAYS]`\n"
-        "Пример: `PROMO100 500 3 7` (код, сумма, количество использований, срок в днях)",
+        "Пример: `PROMO100 500 3 7`\n"
+        "(Код, сумма, количество использований, срок в днях)",
         parse_mode="Markdown"
     )
 
@@ -74,7 +75,7 @@ async def create_promo_from_text(message: Message) -> None:
     context.creating_promo[message.from_user.id] = False
 
     await message.answer(
-        f"✅ Промокод {code} создан!\n"
+        f"✅ Промокод <code>{code}</code> создан!\n"
         f"💰 Сумма: {amount}\n"
         f"🔁 Использований: {uses}\n"
         f"⏳ Срок: {days or 'без ограничений'} дней"
@@ -109,7 +110,7 @@ async def handle_event_creation(message: Message):
 
         user_event["event_title"] = text
         user_event["step"] = "red_odds"
-        await message.answer(f"✅ Название: <b>{text}</b>\n\nВведите коэффициент для красных (например, 1.5):")
+        await message.answer(f"✅ Название: <b>{text}</b>\n\nВведите коэффициент для красных 🔴 (например, 1.5):")
         return
 
     if user_event.get("step") == "red_odds":
@@ -121,7 +122,7 @@ async def handle_event_creation(message: Message):
 
             user_event["red_odds"] = coefficient
             user_event["step"] = "black_odds"
-            await message.answer("Теперь введите коэффициент для черных:")
+            await message.answer("Теперь введите коэффициент для черных ⚫:")
             return
         except ValueError:
             await message.answer("❌ Введите корректное число (например, 1.5):")
@@ -198,11 +199,11 @@ async def handle_event_creation(message: Message):
                         )
                         await context.bot.send_message(
                             u.tg_id,
-                            f"🎲 <b>Начался матч!</b>\n"
+                            f"🎲 <b>Начался матч!</b>\n\n"
                             f"📌 <b>{event_title}</b>\n\n"
                             f"⏱ Время на ставки: <b>10 минут</b>\n"
-                            f"Выберите команду для ставки:\n\n"
-                            f"💳 Ваш баланс: <b>{u.balance}</b> баллов",
+                            f"🎰 Выберите на что поставить:\n\n"
+                            f"💳 Ваш баланс:<code><b>{u.balance}</b></code> баллов",
                             reply_markup=keyboard
                         )
                         sent_count += 1
@@ -345,7 +346,11 @@ async def process_event_result(callback: CallbackQuery):
         bets = bets_result.scalars().all()
 
         if not bets:
-            await callback.message.answer("❌ На это событие не было ставок.")
+            await callback.message.answer(
+                "❌ Событие завершено \n\n"
+                "❌ На это событие не было ставок."
+            )
+
             event.status = EventStatus.RESOLVED
             event.outcome = winner
             event.resolved_at = datetime.utcnow()

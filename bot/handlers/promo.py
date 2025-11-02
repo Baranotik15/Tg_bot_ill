@@ -17,7 +17,7 @@ if not hasattr(context, "waiting_for_promo"):
 async def cmd_promo(message: Message) -> None:
     user_id = message.from_user.id
     context.waiting_for_promo.add(user_id)
-    await message.answer("Отправьте промокод одним сообщением (или используйте: /use CODE)")
+    await message.answer("Отправьте промокод одним сообщением 🎁")
 
 
 @router.message(Command("use"))
@@ -69,7 +69,7 @@ async def handle_promo_code(message: Message, code: str) -> None:
             "points_added": added,
         })
 
-        await message.answer(f"🎉 Промокод применён! Начислено {added} баллов.")
+        await message.answer(f"🎉 Промокод применён! Начислено {added} баллов 💵")
 
     except ValueError as e:
         await message.answer(f"❌ {e}")

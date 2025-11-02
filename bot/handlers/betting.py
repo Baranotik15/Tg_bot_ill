@@ -37,7 +37,7 @@ async def show_available_events(message: Message):
         events = [event for event in all_events if event.is_betting_active()]
 
         if not events:
-            await message.answer("❌ Сейчас нет доступных событий для ставок.\nОжидайте начала нового матча!")
+            await message.answer("❌ Сейчас нет доступных событий для ставок.\nОжидайте начала новой игры!")
             return
 
         user = await session.scalar(select(User).where(User.tg_id == user_id))
@@ -61,8 +61,8 @@ async def show_available_events(message: Message):
         keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
         await message.answer(
-            f"💳 Ваш баланс: <b>{user.balance}</b> баллов\n\n"
-            f"📋 Доступные события для ставок:\n"
+            f"💳 Ваш баланс: <b>{user.balance}</b> баллов 💵\n\n"
+            f"📋 Доступные события для ставок\n"
             f"Выберите событие:",
             reply_markup=keyboard
         )
@@ -111,7 +111,7 @@ async def choose_event_for_bet(callback: CallbackQuery):
         await callback.message.edit_text(
             f"🎲 <b>{event.event_title}</b>\n\n"
             f"⏱ Времени осталось: <b>{minutes_left}:{seconds_left:02d}</b>\n"
-            f"💳 Ваш баланс: <b>{user.balance}</b> баллов\n\n"
+            f"💳 Ваш баланс: <b>{user.balance}</b> баллов 💵\n\n"
             f"Выберите команду для ставки:",
             reply_markup=keyboard
         )
@@ -156,10 +156,19 @@ async def select_team(callback: CallbackQuery):
 
         log(f"Пользователь {user_id} выбрал команду {team_name} для события {event_id}")
 
-        await callback.message.answer(
-            f"Вы выбрали команду: <b>{team_name}</b>\n"
-            f"Теперь введите сумму баллов для ставки:"
-        )
+        if team_name == "Черных":
+            await callback.message.answer(
+                f"🕶️💣 <b>Значит ты за Мафию ?</b> 💣🕶️\n\n"
+                f"Ночь на дворе, ставки высоки — покажи, сколько поставишь 💼💵\n\n"
+                f"💰 Введи сумму баллов для ставки:"
+            )
+        elif team_name == "Красных":
+            await callback.message.answer(
+                f"💥🏙️ <b>Ставишь на Мирных?</b> 🔥\n\n"
+                f"Пусть улицы зальются светом, а правда восторжествует! ⚖️\n\n"
+                f"💰 Введи сумму баллов, для ставки:"
+            )
+
         await callback.answer()
 
     except Exception as e:
@@ -169,11 +178,12 @@ async def select_team(callback: CallbackQuery):
 
 @router.message(F.text, is_pending_bet)
 async def enter_bet_amount(message: Message):
-    """Обработка ввода суммы ставки - ТОЛЬКО для пользователей в режиме ставки"""
-    try:
-        user_id = message.from_user.id
-        text = message.text.strip()
+    """Обработка ввода суммы ставки с возвратом средств при ошибке"""
+    user_id = message.from_user.id
+    text = message.text.strip()
+    amount_deducted = 0
 
+    try:
         if not text.isdigit():
             await message.answer("❌ Пожалуйста, введите число (сумму баллов для ставки)")
             return
@@ -197,7 +207,7 @@ async def enter_bet_amount(message: Message):
             if user.balance < amount:
                 await message.answer(
                     f"❌ У вас недостаточно баллов для ставки.\n"
-                    f"Ваш баланс: {user.balance} баллов"
+                    f"💳 Ваш баланс: {user.balance} баллов"
                 )
                 return
 
@@ -218,6 +228,9 @@ async def enter_bet_amount(message: Message):
             expected_win = int(amount * coefficient)
 
             user.balance -= amount
+            amount_deducted = amount
+
+            log(f"Списано {amount} баллов у пользователя {user_id}")
 
             bet = Bet(
                 user_id=user.id,
@@ -226,6 +239,7 @@ async def enter_bet_amount(message: Message):
                 amount=amount
             )
             session.add(bet)
+
             await session.commit()
 
             log(f"Ставка создана: user_id={user_id}, event_id={event.id}, choice={choice}, amount={amount}")
@@ -238,15 +252,45 @@ async def enter_bet_amount(message: Message):
             f"🎯 Команда: <b>{pending['team_name']}</b>\n"
             f"💰 Сумма ставки: <b>{amount}</b> баллов\n"
             f"📊 Коэффициент: <b>x{coefficient}</b>\n"
-            f"🏆 Ожидаемый выигрыш: <b>{expected_win}</b> баллов\n"
-            f"💳 Ваш баланс: <b>{user.balance}</b> баллов"
+            f"🏆 Ожидаемый выигрыш: <b>{expected_win}</b> баллов 💰\n"
+            f"💳 Ваш текущий баланс: <b>{user.balance}</b> баллов"
         )
 
     except ValueError as e:
         log(f"Ошибка преобразования числа: {e}")
         await message.answer("❌ Пожалуйста, введите корректное число")
+
     except Exception as e:
-        log(f"Ошибка в enter_bet_amount: {e}")
+        log(f"❌ КРИТИЧЕСКАЯ ОШИБКА в enter_bet_amount: {e}")
         import traceback
         log(f"Traceback: {traceback.format_exc()}")
-        await message.answer("❌ Произошла ошибка при обработке ставки")
+
+        if amount_deducted > 0:
+            try:
+                async with get_session()() as session:
+                    user = await session.scalar(select(User).where(User.tg_id == user_id))
+                    if user:
+                        user.balance += amount_deducted
+                        await session.commit()
+                        log(f"🔄 Возвращено {amount_deducted} баллов пользователю {user_id}")
+
+                        await message.answer(
+                            f"❌ Произошла ошибка при обработке ставки.\n"
+                            f"💰 Ваши <b>{amount_deducted}</b> баллов возвращены на счет.\n"
+                            f"💳 Текущий баланс: <b>{user.balance}</b> баллов"
+                        )
+                    else:
+                        log(f"⚠️ Не удалось вернуть средства: пользователь {user_id} не найден")
+                        await message.answer("❌ Произошла критическая ошибка. Обратитесь к администратору.")
+
+            except Exception as refund_error:
+                log(f"❌❌ ОШИБКА ВОЗВРАТА СРЕДСТВ: {refund_error}")
+                await message.answer(
+                    f"❌ Критическая ошибка при возврате средств!\n"
+                    f"Обратитесь к администратору с ID: {user_id}"
+                )
+        else:
+            await message.answer("❌ Произошла ошибка при обработке ставки. Попробуйте еще раз.")
+
+        if user_id in context.pending_bets:
+            del context.pending_bets[user_id]

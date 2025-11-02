@@ -14,13 +14,21 @@ router = Router()
 async def cmd_top(message: Message) -> None:
     async with db.get_session()() as session:
         result = await session.execute(
-            User.__table__.select().order_by(desc(User.balance)).limit(20)
+            User.__table__.select().order_by(desc(User.balance)).limit(5)
         )
         rows = result.fetchall()
-        lines: list[str] = ["Топ пользователей (по баллам):"]
+
+        if not rows:
+            await message.answer("Пока что таблица лидеров пуста 😔")
+            return
+
+        lines: list[str] = ["👑 Топ 5 пользователей по баллам 💎:\n"]
+        medals = ["🥇", "🥈", "🥉"] + ["🔹"] * 2
+
         for idx, r in enumerate(rows, start=1):
             username = r.username or f"id{r.tg_id}"
-            lines.append(f"{idx}. {username}: {r.balance}")
+            lines.append(f"{medals[idx-1]} <b>{username}</b> — <code>{r.balance}</code> 💰")
+
         await message.answer("\n".join(lines))
 
 
@@ -49,7 +57,7 @@ async def cmd_me(message: Message) -> None:
         username = user.username or f"id{user.tg_id}"
         await message.answer(
             f"📊 <b>Ваш рейтинг</b>\n\n"
-            f"👤 Пользователь: {username}\n"
-            f"💰 Баланс: <b>{user.balance}</b>\n"
+            f"👤 Пользователь: <b>{username}</b>\n"
+            f"💰 Баланс: <code><b>{user.balance}</b></code>\n"
             f"🏅 Место: <b>{position}</b> из {total_users}"
         )
