@@ -1,7 +1,7 @@
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
 from bot import context
-from bot.db import get_session, User, Bet, Event, Outcome
+from bot.db import get_session, User, Bet, Event, Outcome, EventStatus
 from sqlalchemy import select
 
 router = Router()
@@ -21,6 +21,90 @@ def is_pending_bet(message: Message) -> bool:
             user_id in context.pending_bets and
             not message.text.startswith('/')
     )
+
+
+@router.message(F.text == "🎰 Сделать ставку")
+async def show_available_events(message: Message):
+    """Показать доступные события для ставок"""
+    user_id = message.from_user.id
+
+    async with get_session()() as session:
+        events_result = await session.execute(
+            select(Event).where(Event.status == EventStatus.OPEN)
+        )
+        events = events_result.scalars().all()
+
+        if not events:
+            await message.answer("❌ Сейчас нет доступных событий для ставок.\nОжидайте начала нового матча!")
+            return
+
+        user = await session.scalar(select(User).where(User.tg_id == user_id))
+        if not user:
+            await message.answer("❌ Ошибка: ваш профиль не найден.")
+            return
+
+        keyboard_buttons = []
+        for event in events:
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=f"🎲 {event.name} (🔴x{event.red_odds} ⚫x{event.black_odds})",
+                    callback_data=f"choose_event:{event.id}"
+                )
+            ])
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
+        await message.answer(
+            f"💳 Ваш баланс: <b>{user.balance}</b> баллов\n\n"
+            f"📋 Доступные события для ставок:\n"
+            f"Выберите событие:",
+            reply_markup=keyboard
+        )
+
+
+@router.callback_query(F.data.startswith("choose_event:"))
+async def choose_event_for_bet(callback: CallbackQuery):
+    """Выбор события и показ команд"""
+    user_id = callback.from_user.id
+    event_id = int(callback.data.split(":")[1])
+
+    async with get_session()() as session:
+        event = await session.get(Event, event_id)
+        if not event:
+            await callback.answer("❌ Событие не найдено!")
+            return
+
+        if event.status != EventStatus.OPEN:
+            await callback.answer("❌ Это событие уже завершено!")
+            return
+
+        user = await session.scalar(select(User).where(User.tg_id == user_id))
+        if not user:
+            await callback.answer("❌ Профиль не найден!")
+            return
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=f"🔴 Красные x{event.red_odds}",
+                        callback_data=f"bet_red:{event_id}"
+                    ),
+                    InlineKeyboardButton(
+                        text=f"⚫ Черные x{event.black_odds}",
+                        callback_data=f"bet_black:{event_id}"
+                    )
+                ]
+            ]
+        )
+
+        await callback.message.edit_text(
+            f"🎲 <b>{event.name}</b>\n\n"
+            f"💳 Ваш баланс: <b>{user.balance}</b> баллов\n\n"
+            f"Выберите команду для ставки:",
+            reply_markup=keyboard
+        )
+        await callback.answer()
 
 
 @router.callback_query(F.data.startswith("bet_"))
@@ -107,6 +191,11 @@ async def enter_bet_amount(message: Message):
                 del context.pending_bets[user_id]
                 return
 
+            if event.status != EventStatus.OPEN:
+                await message.answer("❌ Это событие уже завершено. Ставки не принимаются.")
+                del context.pending_bets[user_id]
+                return
+
             choice = Outcome.RED if pending["team_key"] == "bet_red" else Outcome.BLACK
 
             coefficient = event.red_odds if choice == Outcome.RED else event.black_odds
@@ -130,6 +219,7 @@ async def enter_bet_amount(message: Message):
 
         await message.answer(
             f"✅ <b>Ваша ставка принята!</b>\n\n"
+            f"🎲 Событие: <b>{event.name}</b>\n"
             f"🎯 Команда: <b>{pending['team_name']}</b>\n"
             f"💰 Сумма ставки: <b>{amount}</b> баллов\n"
             f"📊 Коэффициент: <b>x{coefficient}</b>\n"
