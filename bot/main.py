@@ -5,8 +5,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-from bot.config import Settings
-from bot.utils.logger import setup_logging, audit
+from bot.utils.logger import audit
 from bot.db import init_db
 from bot.handlers.start import router as start_router
 from bot.handlers.leaderboard import router as leaderboard_router
@@ -18,9 +17,10 @@ from bot.handlers import betting
 
 
 async def main() -> None:
-    settings = Settings.load()
+    context.init_context()
 
-    logger = setup_logging(settings.log_dir, settings.log_level)
+    settings = context.settings
+    logger = context.logger
 
     if not settings.bot_token:
         raise RuntimeError("BOT_TOKEN is not set. Put it in .env (see sample.env)")
@@ -31,9 +31,6 @@ async def main() -> None:
     audit(logger, "db_init", {"url": settings.database_url})
     await init_db(settings.database_url)
 
-    context.settings = settings
-    context.logger = logger
-
     bot = Bot(
         token=settings.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
@@ -42,8 +39,8 @@ async def main() -> None:
     context.bot = bot
 
     dp = Dispatcher()
-    dp.include_router(admin_router)
     dp.include_router(betting.router)
+    dp.include_router(admin_router)
     dp.include_router(start_router)
     dp.include_router(leaderboard_router)
     dp.include_router(promo_router)

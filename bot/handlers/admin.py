@@ -13,6 +13,16 @@ def is_admin(user_id: int) -> bool:
     return bool(settings and user_id in settings.admin_ids)
 
 
+def is_creating_event(message: Message) -> bool:
+    """Проверка, что админ в процессе создания события"""
+    user_id = message.from_user.id
+    return (
+        is_admin(user_id) and
+        hasattr(context, 'pending_events') and
+        user_id in context.pending_events
+    )
+
+
 @router.message(F.text == "💳 Создать промокод")
 async def btn_create_promo(message: Message) -> None:
     if not is_admin(message.from_user.id):
@@ -78,66 +88,95 @@ async def start_event_btn(message: Message):
         await message.answer("Недостаточно прав.")
         return
 
-    if not hasattr(context, "current_event"):
-        context.current_event = {}
+    if not hasattr(context, "pending_events"):
+        context.pending_events = {}
 
-    context.current_event[message.from_user.id] = {"creating_event": True}
+    context.pending_events[message.from_user.id] = {"step": "red_odds"}
     await message.answer("Введите коэффициент для красных (например, 1.5):")
 
 
-@router.message(F.text.regexp(r"^\d+(\.\d+)?$"))
+@router.message(F.text.regexp(r"^\d+(\.\d+)?$"), is_creating_event)
 async def set_coefficient(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-
+    """Обработка ввода коэффициентов - ТОЛЬКО для админов создающих событие"""
     user_id = message.from_user.id
-    user_event = getattr(context, "current_event", {}).get(user_id)
-    if not user_event or not user_event.get("creating_event"):
-        return
+    user_event = context.pending_events[user_id]
+    coefficient = float(message.text)
 
-    if "red_coef" not in user_event:
-        user_event["red_coef"] = float(message.text)
+    if user_event.get("step") == "red_odds":
+        user_event["red_odds"] = coefficient
+        user_event["step"] = "black_odds"
         await message.answer("Теперь введите коэффициент для черных:")
         return
 
-    user_event["black_coef"] = float(message.text)
+    if user_event.get("step") == "black_odds":
+        user_event["black_odds"] = coefficient
 
-    async with get_session()() as session:
-        event = Event(
-            name=f"Ставка {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}",
-            description=f"Красные: {user_event['red_coef']} / Черные: {user_event['black_coef']}",
-            status=EventStatus.OPEN
+        async with get_session()() as session:
+            event = Event(
+                name=f"Ставка {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}",
+                description=f"Красные: {user_event['red_odds']} / Черные: {user_event['black_odds']}",
+                status=EventStatus.OPEN,
+                red_odds=user_event['red_odds'],
+                black_odds=user_event['black_odds']
+            )
+            session.add(event)
+            await session.commit()
+            await session.refresh(event)
+
+            if hasattr(context, 'logger'):
+                context.logger.info(
+                    f"[ADMIN] Создано событие {event.id}: "
+                    f"red_odds={event.red_odds}, black_odds={event.black_odds}"
+                )
+
+            event_id = event.id
+            red_odds = event.red_odds
+            black_odds = event.black_odds
+
+        await message.answer(
+            f"✅ Событие создано!\n"
+            f"Красные: X{user_event['red_odds']}\n"
+            f"Черные: X{user_event['black_odds']}"
         )
-        session.add(event)
-        await session.commit()
-        await session.refresh(event)
 
-    await message.answer(
-        f"✅ Событие создано!\n"
-        f"Красные: X{user_event['red_coef']}\n"
-        f"Черные: X{user_event['black_coef']}"
-    )
+        async with get_session()() as session:
+            users_result = await session.execute(select(User))
+            users = users_result.scalars().all()
 
-    async with get_session()() as session:
-        users = await session.execute(select(User))
-        users = users.scalars().all()
+            sent_count = 0
+            failed_count = 0
 
-        for u in users:
-            try:
-                keyboard = InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            InlineKeyboardButton(text="🔴 Красные", callback_data=f"bet_red:{event.id}"),
-                            InlineKeyboardButton(text="⚫ Черные", callback_data=f"bet_black:{event.id}")
+            for u in users:
+                try:
+                    keyboard = InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                InlineKeyboardButton(
+                                    text=f"🔴 Красные x{red_odds}",
+                                    callback_data=f"bet_red:{event_id}"
+                                ),
+                                InlineKeyboardButton(
+                                    text=f"⚫ Черные x{black_odds}",
+                                    callback_data=f"bet_black:{event_id}"
+                                )
+                            ]
                         ]
-                    ]
-                )
-                await context.bot.send_message(
-                    u.tg_id,
-                    f"🎲 Начался матч!\nВыберите команду для ставки:",
-                    reply_markup=keyboard
-                )
-            except Exception:
-                continue
+                    )
+                    await context.bot.send_message(
+                        u.tg_id,
+                        f"🎲 <b>Начался матч!</b>\n"
+                        f"Выберите команду для ставки:\n\n"
+                        f"💳 Ваш баланс: <b>{u.balance}</b> баллов",
+                        reply_markup=keyboard
+                    )
+                    sent_count += 1
+                except Exception as e:
+                    failed_count += 1
+                    if hasattr(context, 'logger'):
+                        context.logger.warning(f"[ADMIN] Не удалось отправить уведомление пользователю {u.tg_id}: {e}")
+                    continue
 
-    del context.current_event[user_id]
+            if hasattr(context, 'logger'):
+                context.logger.info(f"[ADMIN] Уведомления отправлены: {sent_count} успешно, {failed_count} ошибок")
+
+        del context.pending_events[user_id]

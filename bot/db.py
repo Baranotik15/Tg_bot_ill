@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -60,6 +61,8 @@ class Event(Base):
         Enum(EventStatus), default=EventStatus.OPEN, index=True
     )
     outcome: Mapped[Outcome] = mapped_column(Enum(Outcome), default=Outcome.NONE)
+    red_odds: Mapped[float] = mapped_column(Float, default=1.0)
+    black_odds: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
