@@ -55,6 +55,7 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_title: Mapped[str] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[EventStatus] = mapped_column(
@@ -175,7 +176,6 @@ async def redeem_promo(user_id: int, code_str: str) -> int:
         if promo.expires_at and promo.expires_at < datetime.utcnow():
             raise ValueError("Промокод истёк")
 
-        # Проверка, использовал ли уже юзер этот промокод
         usage_exists = await session.scalar(
             select(PromoUsage).where(
                 PromoUsage.promo_id == promo.id,

@@ -47,7 +47,7 @@ async def show_available_events(message: Message):
         for event in events:
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    text=f"🎲 {event.name} (🔴x{event.red_odds} ⚫x{event.black_odds})",
+                    text=f"🎲 {event.event_title} (🔴x{event.red_odds} ⚫x{event.black_odds})",
                     callback_data=f"choose_event:{event.id}"
                 )
             ])
@@ -99,7 +99,7 @@ async def choose_event_for_bet(callback: CallbackQuery):
         )
 
         await callback.message.edit_text(
-            f"🎲 <b>{event.name}</b>\n\n"
+            f"🎲 <b>{event.event_title}</b>\n\n"
             f"💳 Ваш баланс: <b>{user.balance}</b> баллов\n\n"
             f"Выберите команду для ставки:",
             reply_markup=keyboard
@@ -197,9 +197,7 @@ async def enter_bet_amount(message: Message):
                 return
 
             choice = Outcome.RED if pending["team_key"] == "bet_red" else Outcome.BLACK
-
             coefficient = event.red_odds if choice == Outcome.RED else event.black_odds
-
             expected_win = int(amount * coefficient)
 
             user.balance -= amount
@@ -219,7 +217,7 @@ async def enter_bet_amount(message: Message):
 
         await message.answer(
             f"✅ <b>Ваша ставка принята!</b>\n\n"
-            f"🎲 Событие: <b>{event.name}</b>\n"
+            f"🎲 Событие: <b>{event.event_title}</b>\n"
             f"🎯 Команда: <b>{pending['team_name']}</b>\n"
             f"💰 Сумма ставки: <b>{amount}</b> баллов\n"
             f"📊 Коэффициент: <b>x{coefficient}</b>\n"

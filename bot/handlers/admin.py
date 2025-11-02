@@ -83,7 +83,7 @@ async def create_promo_from_text(message: Message) -> None:
 
 @router.message(F.text == "⚡ Начать событие")
 async def start_event_btn(message: Message):
-    """Старт создания события (через обычную кнопку)"""
+    """Старт создания события"""
     if not is_admin(message.from_user.id):
         await message.answer("Недостаточно прав.")
         return
@@ -91,95 +91,129 @@ async def start_event_btn(message: Message):
     if not hasattr(context, "pending_events"):
         context.pending_events = {}
 
-    context.pending_events[message.from_user.id] = {"step": "red_odds"}
-    await message.answer("Введите коэффициент для красных (например, 1.5):")
+    context.pending_events[message.from_user.id] = {"step": "event_title"}
+    await message.answer("📝 Введите название для события:")
 
 
-@router.message(F.text.regexp(r"^\d+(\.\d+)?$"), is_creating_event)
-async def set_coefficient(message: Message):
-    """Обработка ввода коэффициентов - ТОЛЬКО для админов создающих событие"""
+@router.message(F.text, is_creating_event)
+async def handle_event_creation(message: Message):
+    """Обработка создания события по шагам"""
     user_id = message.from_user.id
     user_event = context.pending_events[user_id]
-    coefficient = float(message.text)
+    text = message.text.strip()
 
-    if user_event.get("step") == "red_odds":
-        user_event["red_odds"] = coefficient
-        user_event["step"] = "black_odds"
-        await message.answer("Теперь введите коэффициент для черных:")
+    if user_event.get("step") == "event_title":
+        if len(text) < 3:
+            await message.answer("❌ Название должно содержать минимум 3 символа. Попробуйте снова:")
+            return
+
+        user_event["event_title"] = text
+        user_event["step"] = "red_odds"
+        await message.answer(f"✅ Название: <b>{text}</b>\n\nВведите коэффициент для красных (например, 1.5):")
         return
 
+    if user_event.get("step") == "red_odds":
+        try:
+            coefficient = float(text)
+            if coefficient <= 0:
+                await message.answer("❌ Коэффициент должен быть больше 0. Попробуйте снова:")
+                return
+
+            user_event["red_odds"] = coefficient
+            user_event["step"] = "black_odds"
+            await message.answer("Теперь введите коэффициент для черных:")
+            return
+        except ValueError:
+            await message.answer("❌ Введите корректное число (например, 1.5):")
+            return
+
     if user_event.get("step") == "black_odds":
-        user_event["black_odds"] = coefficient
+        try:
+            coefficient = float(text)
+            if coefficient <= 0:
+                await message.answer("❌ Коэффициент должен быть больше 0. Попробуйте снова:")
+                return
 
-        async with get_session()() as session:
-            event = Event(
-                name=f"Ставка {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}",
-                description=f"Красные: {user_event['red_odds']} / Черные: {user_event['black_odds']}",
-                status=EventStatus.OPEN,
-                red_odds=user_event['red_odds'],
-                black_odds=user_event['black_odds']
-            )
-            session.add(event)
-            await session.commit()
-            await session.refresh(event)
+            user_event["black_odds"] = coefficient
 
-            if hasattr(context, 'logger'):
-                context.logger.info(
-                    f"[ADMIN] Создано событие {event.id}: "
-                    f"red_odds={event.red_odds}, black_odds={event.black_odds}"
+            async with get_session()() as session:
+                event = Event(
+                    event_title=user_event['event_title'],
+                    name=f"Ставка {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}",
+                    description=f"{user_event['event_title']} - Красные: {user_event['red_odds']} / Черные: {user_event['black_odds']}",
+                    status=EventStatus.OPEN,
+                    red_odds=user_event['red_odds'],
+                    black_odds=user_event['black_odds']
                 )
+                session.add(event)
+                await session.commit()
+                await session.refresh(event)
 
-            event_id = event.id
-            red_odds = event.red_odds
-            black_odds = event.black_odds
+                if hasattr(context, 'logger'):
+                    context.logger.info(
+                        f"[ADMIN] Создано событие {event.id}: "
+                        f"title='{event.event_title}', red_odds={event.red_odds}, black_odds={event.black_odds}"
+                    )
 
-        await message.answer(
-            f"✅ Событие создано!\n"
-            f"Красные: X{user_event['red_odds']}\n"
-            f"Черные: X{user_event['black_odds']}"
-        )
+                event_id = event.id
+                event_title = event.event_title
+                red_odds = event.red_odds
+                black_odds = event.black_odds
 
-        async with get_session()() as session:
-            users_result = await session.execute(select(User))
-            users = users_result.scalars().all()
+            await message.answer(
+                f"✅ Событие создано!\n"
+                f"📌 Название: <b>{event_title}</b>\n"
+                f"🔴 Красные: X{red_odds}\n"
+                f"⚫ Черные: X{black_odds}"
+            )
 
-            sent_count = 0
-            failed_count = 0
+            async with get_session()() as session:
+                users_result = await session.execute(select(User))
+                users = users_result.scalars().all()
 
-            for u in users:
-                try:
-                    keyboard = InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [
-                                InlineKeyboardButton(
-                                    text=f"🔴 Красные x{red_odds}",
-                                    callback_data=f"bet_red:{event_id}"
-                                ),
-                                InlineKeyboardButton(
-                                    text=f"⚫ Черные x{black_odds}",
-                                    callback_data=f"bet_black:{event_id}"
-                                )
+                sent_count = 0
+                failed_count = 0
+
+                for u in users:
+                    try:
+                        keyboard = InlineKeyboardMarkup(
+                            inline_keyboard=[
+                                [
+                                    InlineKeyboardButton(
+                                        text=f"🔴 Красные x{red_odds}",
+                                        callback_data=f"bet_red:{event_id}"
+                                    ),
+                                    InlineKeyboardButton(
+                                        text=f"⚫ Черные x{black_odds}",
+                                        callback_data=f"bet_black:{event_id}"
+                                    )
+                                ]
                             ]
-                        ]
-                    )
-                    await context.bot.send_message(
-                        u.tg_id,
-                        f"🎲 <b>Начался матч!</b>\n"
-                        f"Выберите команду для ставки:\n\n"
-                        f"💳 Ваш баланс: <b>{u.balance}</b> баллов",
-                        reply_markup=keyboard
-                    )
-                    sent_count += 1
-                except Exception as e:
-                    failed_count += 1
-                    if hasattr(context, 'logger'):
-                        context.logger.warning(f"[ADMIN] Не удалось отправить уведомление пользователю {u.tg_id}: {e}")
-                    continue
+                        )
+                        await context.bot.send_message(
+                            u.tg_id,
+                            f"🎲 <b>Начался матч!</b>\n"
+                            f"📌 <b>{event_title}</b>\n\n"
+                            f"Выберите команду для ставки:\n\n"
+                            f"💳 Ваш баланс: <b>{u.balance}</b> баллов",
+                            reply_markup=keyboard
+                        )
+                        sent_count += 1
+                    except Exception as e:
+                        failed_count += 1
+                        if hasattr(context, 'logger'):
+                            context.logger.warning(
+                                f"[ADMIN] Не удалось отправить уведомление пользователю {u.tg_id}: {e}")
+                        continue
 
-            if hasattr(context, 'logger'):
-                context.logger.info(f"[ADMIN] Уведомления отправлены: {sent_count} успешно, {failed_count} ошибок")
+                if hasattr(context, 'logger'):
+                    context.logger.info(f"[ADMIN] Уведомления отправлены: {sent_count} успешно, {failed_count} ошибок")
 
-        del context.pending_events[user_id]
+            del context.pending_events[user_id]
+
+        except ValueError:
+            await message.answer("❌ Введите корректное число (например, 1.5):")
+            return
 
 
 @router.message(F.text == "🏁 Завершить событие")
@@ -218,7 +252,7 @@ async def finish_event_btn(message: Message):
 
             await message.answer(
                 f"🏁 Завершение события:\n"
-                f"<b>{event.name}</b>\n\n"
+                f"📌 <b>{event.event_title}</b>\n\n"
                 f"Кто победил?",
                 reply_markup=keyboard
             )
@@ -227,7 +261,7 @@ async def finish_event_btn(message: Message):
             for event in events:
                 keyboard_buttons.append([
                     InlineKeyboardButton(
-                        text=f"{event.name}",
+                        text=f"📌 {event.event_title}",
                         callback_data=f"select_event:{event.id}"
                     )
                 ])
@@ -245,6 +279,12 @@ async def select_event_to_finish(callback: CallbackQuery):
 
     event_id = int(callback.data.split(":")[1])
 
+    async with get_session()() as session:
+        event = await session.get(Event, event_id)
+        if not event:
+            await callback.answer("Событие не найдено!")
+            return
+
     if not hasattr(context, "finishing_events"):
         context.finishing_events = {}
 
@@ -259,7 +299,12 @@ async def select_event_to_finish(callback: CallbackQuery):
         ]
     )
 
-    await callback.message.edit_text("🏁 Кто победил?", reply_markup=keyboard)
+    await callback.message.edit_text(
+        f"🏁 Завершение события:\n"
+        f"📌 <b>{event.event_title}</b>\n\n"
+        f"Кто победил?",
+        reply_markup=keyboard
+    )
     await callback.answer()
 
 
@@ -324,6 +369,7 @@ async def process_event_result(callback: CallbackQuery):
                     await context.bot.send_message(
                         user.tg_id,
                         f"🎉 <b>Поздравляем! Вы выиграли!</b>\n\n"
+                        f"📌 Событие: <b>{event.event_title}</b>\n"
                         f"🏆 Победили: <b>{winner_name}</b>\n"
                         f"💰 Ваша ставка: <b>{bet.amount}</b> баллов\n"
                         f"📊 Коэффициент: <b>x{coefficient}</b>\n"
@@ -342,6 +388,7 @@ async def process_event_result(callback: CallbackQuery):
                     await context.bot.send_message(
                         user.tg_id,
                         f"😔 <b>К сожалению, вы проиграли</b>\n\n"
+                        f"📌 Событие: <b>{event.event_title}</b>\n"
                         f"🏆 Победили: <b>{winner_name}</b>\n"
                         f"💰 Ваша ставка: <b>{bet.amount}</b> баллов\n"
                         f"📉 Проигрыш: <b>-{bet.amount}</b> баллов\n"
@@ -359,12 +406,13 @@ async def process_event_result(callback: CallbackQuery):
 
         if hasattr(context, 'logger'):
             context.logger.info(
-                f"[ADMIN] Событие {event_id} завершено. Победитель: {winner_name}. "
+                f"[ADMIN] Событие {event_id} '{event.event_title}' завершено. Победитель: {winner_name}. "
                 f"Победителей: {total_winners}, Проигравших: {total_losers}, Выплачено: {total_payout}"
             )
 
     await callback.message.edit_text(
         f"✅ <b>Событие завершено!</b>\n\n"
+        f"📌 Событие: <b>{event.event_title}</b>\n"
         f"🏆 Победитель: <b>{winner_name}</b>\n"
         f"✅ Победителей: <b>{total_winners}</b>\n"
         f"❌ Проигравших: <b>{total_losers}</b>\n"
