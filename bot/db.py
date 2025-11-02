@@ -64,6 +64,8 @@ class Event(Base):
     outcome: Mapped[Outcome] = mapped_column(Enum(Outcome), default=Outcome.NONE)
     red_odds: Mapped[float] = mapped_column(Float, default=1.0)
     black_odds: Mapped[float] = mapped_column(Float, default=1.0)
+    betting_starts_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # Время начала приема ставок
+    betting_ends_at: Mapped[datetime] = mapped_column(DateTime)  # Время окончания приема ставок
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -71,6 +73,22 @@ class Event(Base):
     bets: Mapped[list[Bet]] = relationship(
         "Bet", back_populates="event", cascade="all, delete-orphan"
     )
+
+    def is_betting_active(self) -> bool:
+        """Проверка, активен ли прием ставок"""
+        now = datetime.utcnow()
+        return (
+            self.status == EventStatus.OPEN and
+            self.betting_starts_at <= now <= self.betting_ends_at
+        )
+
+    def get_time_left(self) -> int:
+        """Получить оставшееся время в секундах"""
+        now = datetime.utcnow()
+        if now > self.betting_ends_at:
+            return 0
+        delta = self.betting_ends_at - now
+        return int(delta.total_seconds())
 
 
 class Bet(Base):

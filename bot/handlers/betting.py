@@ -32,7 +32,9 @@ async def show_available_events(message: Message):
         events_result = await session.execute(
             select(Event).where(Event.status == EventStatus.OPEN)
         )
-        events = events_result.scalars().all()
+        all_events = events_result.scalars().all()
+
+        events = [event for event in all_events if event.is_betting_active()]
 
         if not events:
             await message.answer("❌ Сейчас нет доступных событий для ставок.\nОжидайте начала нового матча!")
@@ -45,9 +47,13 @@ async def show_available_events(message: Message):
 
         keyboard_buttons = []
         for event in events:
+            time_left = event.get_time_left()
+            minutes_left = time_left // 60
+            seconds_left = time_left % 60
+
             keyboard_buttons.append([
                 InlineKeyboardButton(
-                    text=f"🎲 {event.event_title} (🔴x{event.red_odds} ⚫x{event.black_odds})",
+                    text=f"🎲 {event.event_title} (🔴x{event.red_odds} ⚫x{event.black_odds}) ⏱ {minutes_left}:{seconds_left:02d}",
                     callback_data=f"choose_event:{event.id}"
                 )
             ])
@@ -74,14 +80,18 @@ async def choose_event_for_bet(callback: CallbackQuery):
             await callback.answer("❌ Событие не найдено!")
             return
 
-        if event.status != EventStatus.OPEN:
-            await callback.answer("❌ Это событие уже завершено!")
+        if not event.is_betting_active():
+            await callback.answer("⏱ Время для ставок истекло!", show_alert=True)
             return
 
         user = await session.scalar(select(User).where(User.tg_id == user_id))
         if not user:
             await callback.answer("❌ Профиль не найден!")
             return
+
+        time_left = event.get_time_left()
+        minutes_left = time_left // 60
+        seconds_left = time_left % 60
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -100,6 +110,7 @@ async def choose_event_for_bet(callback: CallbackQuery):
 
         await callback.message.edit_text(
             f"🎲 <b>{event.event_title}</b>\n\n"
+            f"⏱ Времени осталось: <b>{minutes_left}:{seconds_left:02d}</b>\n"
             f"💳 Ваш баланс: <b>{user.balance}</b> баллов\n\n"
             f"Выберите команду для ставки:",
             reply_markup=keyboard
@@ -121,6 +132,12 @@ async def select_team(callback: CallbackQuery):
 
         team_key, event_id = data.split(":")
         event_id = int(event_id)
+
+        async with get_session()() as session:
+            event = await session.get(Event, event_id)
+            if not event or not event.is_betting_active():
+                await callback.answer("⏱ Время для ставок истекло!", show_alert=True)
+                return
 
         team_names = {
             "bet_red": "Красных",
@@ -191,8 +208,8 @@ async def enter_bet_amount(message: Message):
                 del context.pending_bets[user_id]
                 return
 
-            if event.status != EventStatus.OPEN:
-                await message.answer("❌ Это событие уже завершено. Ставки не принимаются.")
+            if not event.is_betting_active():
+                await message.answer("⏱ Время для ставок истекло!")
                 del context.pending_bets[user_id]
                 return
 

@@ -137,13 +137,18 @@ async def handle_event_creation(message: Message):
             user_event["black_odds"] = coefficient
 
             async with get_session()() as session:
+                now = datetime.utcnow()
+                betting_end_time = now + timedelta(minutes=10)  # 10 минут на ставки
+
                 event = Event(
                     event_title=user_event['event_title'],
-                    name=f"Ставка {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}",
+                    name=f"Ставка {now.strftime('%Y-%m-%d %H:%M:%S')}",
                     description=f"{user_event['event_title']} - Красные: {user_event['red_odds']} / Черные: {user_event['black_odds']}",
                     status=EventStatus.OPEN,
                     red_odds=user_event['red_odds'],
-                    black_odds=user_event['black_odds']
+                    black_odds=user_event['black_odds'],
+                    betting_starts_at=now,
+                    betting_ends_at=betting_end_time
                 )
                 session.add(event)
                 await session.commit()
@@ -152,7 +157,8 @@ async def handle_event_creation(message: Message):
                 if hasattr(context, 'logger'):
                     context.logger.info(
                         f"[ADMIN] Создано событие {event.id}: "
-                        f"title='{event.event_title}', red_odds={event.red_odds}, black_odds={event.black_odds}"
+                        f"title='{event.event_title}', red_odds={event.red_odds}, black_odds={event.black_odds}, "
+                        f"betting_ends_at={betting_end_time}"
                     )
 
                 event_id = event.id
@@ -164,7 +170,8 @@ async def handle_event_creation(message: Message):
                 f"✅ Событие создано!\n"
                 f"📌 Название: <b>{event_title}</b>\n"
                 f"🔴 Красные: X{red_odds}\n"
-                f"⚫ Черные: X{black_odds}"
+                f"⚫ Черные: X{black_odds}\n"
+                f"⏱ Ставки принимаются: <b>10 минут</b>"
             )
 
             async with get_session()() as session:
@@ -194,6 +201,7 @@ async def handle_event_creation(message: Message):
                             u.tg_id,
                             f"🎲 <b>Начался матч!</b>\n"
                             f"📌 <b>{event_title}</b>\n\n"
+                            f"⏱ Время на ставки: <b>10 минут</b>\n"
                             f"Выберите команду для ставки:\n\n"
                             f"💳 Ваш баланс: <b>{u.balance}</b> баллов",
                             reply_markup=keyboard
