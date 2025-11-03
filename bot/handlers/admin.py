@@ -434,3 +434,174 @@ async def process_event_result(callback: CallbackQuery):
 
     if hasattr(context, "finishing_events"):
         context.finishing_events.pop(callback.from_user.id, None)
+
+
+@router.message(F.text == "📢 Рассылка всем")
+async def broadcast_message_btn(message: Message):
+    """Начало массовой рассылки"""
+    if not is_admin(message.from_user.id):
+        await message.answer("Недостаточно прав.")
+        return
+
+    if not hasattr(context, "broadcasting"):
+        context.broadcasting = {}
+
+    context.broadcasting[message.from_user.id] = {"waiting_for_message": True}
+
+    await message.answer(
+        "📣 <b>Режим массовой рассылки активирован!</b> 💼\n\n"
+        "🕶 <i>Пришло время донести слово до каждого игрока…</i>\n\n"
+        "Отправь сообщение, которое хочешь разослать всем пользователям 💬\n\n"
+        "📦 <b>Поддерживаемые форматы:</b>\n"
+        "• 📝 Текст (с <b>HTML</b>-разметкой)\n"
+        "• 🖼 Фото\n"
+        "• 🎞 Видео\n"
+        "• 🎬 GIF-анимации\n"
+        "• 🎭 Стикеры\n"
+        "• 📚 Документы\n\n"
+        "🚫 Для отмены рассылки — отправь команду <code>/cancel</code>"
+    )
+
+
+def is_broadcasting(message: Message) -> bool:
+    """Проверка, что админ в режиме рассылки"""
+    user_id = message.from_user.id
+    return (
+            is_admin(user_id) and
+            hasattr(context, 'broadcasting') and
+            user_id in context.broadcasting and
+            context.broadcasting[user_id].get("waiting_for_message")
+    )
+
+
+@router.message(F.text == "/cancel", is_broadcasting)
+async def cancel_broadcast(message: Message):
+    """Отмена рассылки"""
+    user_id = message.from_user.id
+    if user_id in context.broadcasting:
+        del context.broadcasting[user_id]
+    await message.answer("❌ Рассылка отменена.")
+
+
+@router.message(is_broadcasting)
+async def handle_broadcast_message(message: Message):
+    """Обработка сообщения для рассылки"""
+    user_id = message.from_user.id
+
+    if not is_admin(user_id):
+        return
+
+    # Подтверждение
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, разослать", callback_data="broadcast_confirm"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="broadcast_cancel")
+            ]
+        ]
+    )
+
+    context.broadcasting[user_id]["message"] = message
+    context.broadcasting[user_id]["waiting_for_message"] = False
+
+    await message.answer(
+        "📢 <b>Подтвердите рассылку</b>\n\n"
+        "Это сообщение будет отправлено ВСЕМ пользователям бота.\n"
+        "Вы уверены?",
+        reply_markup=keyboard
+    )
+
+
+@router.callback_query(F.data == "broadcast_cancel")
+async def cancel_broadcast_confirm(callback: CallbackQuery):
+    """Отмена подтвержденной рассылки"""
+    user_id = callback.from_user.id
+
+    if not is_admin(user_id):
+        await callback.answer("Недостаточно прав.")
+        return
+
+    if user_id in context.broadcasting:
+        del context.broadcasting[user_id]
+
+    await callback.message.edit_text("❌ Рассылка отменена.")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "broadcast_confirm")
+async def confirm_broadcast(callback: CallbackQuery):
+    """Подтверждение и выполнение рассылки"""
+    user_id = callback.from_user.id
+
+    if not is_admin(user_id):
+        await callback.answer("Недостаточно прав.")
+        return
+
+    if user_id not in context.broadcasting or "message" not in context.broadcasting[user_id]:
+        await callback.answer("Ошибка: сообщение не найдено")
+        return
+
+    original_message = context.broadcasting[user_id]["message"]
+
+    await callback.message.edit_text("📤 Начинаю рассылку...")
+
+    async with get_session()() as session:
+        users_result = await session.execute(select(User))
+        users = users_result.scalars().all()
+
+        total_users = len(users)
+        sent_count = 0
+        failed_count = 0
+
+        for user in users:
+            try:
+                if original_message.photo:
+                    await context.bot.send_photo(
+                        user.tg_id,
+                        photo=original_message.photo[-1].file_id,
+                        caption=original_message.caption or ""
+                    )
+                elif original_message.video:
+                    await context.bot.send_video(
+                        user.tg_id,
+                        video=original_message.video.file_id,
+                        caption=original_message.caption or ""
+                    )
+                elif original_message.document:
+                    await context.bot.send_document(
+                        user.tg_id,
+                        document=original_message.document.file_id,
+                        caption=original_message.caption or ""
+                    )
+                elif original_message.text:
+                    await context.bot.send_message(
+                        user.tg_id,
+                        text=original_message.text
+                    )
+                else:
+                    continue
+
+                sent_count += 1
+
+            except Exception as e:
+                failed_count += 1
+                if hasattr(context, 'logger'):
+                    context.logger.warning(f"[BROADCAST] Не удалось отправить пользователю {user.tg_id}: {e}")
+                continue
+
+    del context.broadcasting[user_id]
+
+    await callback.message.edit_text(
+        f"✅ <b>Рассылка завершена!</b>\n\n"
+        f"👥 Всего пользователей: <b>{total_users}</b>\n"
+        f"✅ Успешно отправлено: <b>{sent_count}</b>\n"
+        f"❌ Ошибок: <b>{failed_count}</b>"
+    )
+
+    if hasattr(context, 'logger'):
+        context.logger.info(
+            f"[BROADCAST] Рассылка завершена. "
+            f"Отправлено: {sent_count}/{total_users}, Ошибок: {failed_count}"
+        )
+
+    await callback.answer()
