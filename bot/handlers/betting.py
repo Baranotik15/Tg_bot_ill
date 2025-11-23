@@ -156,6 +156,11 @@ async def select_team(callback: CallbackQuery):
 
         log(f"Пользователь {user_id} выбрал команду {team_name} для события {event_id}")
 
+        try:
+            await callback.message.delete()
+        except Exception as e:
+            log(f"Не удалось удалить сообщение: {e}")
+
         if team_name == "Черных":
             await callback.message.answer(
                 f"🕶️💣 <b>Значит ты за Мафию ?</b> 💣🕶️\n\n"
