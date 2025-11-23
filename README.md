@@ -185,7 +185,7 @@ sqlalchemy.url = sqlite:///./data/bot.db
 ```
 Создайте папку где будет храниться база данных если её ещё нет:
 ```bash
-mkdir data
+mkdir -p data
 ```
 
 ### 🔹 2.  Первичная миграция
