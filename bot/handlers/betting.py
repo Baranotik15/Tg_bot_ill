@@ -3,6 +3,7 @@ from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKe
 from bot import context
 from bot.db import get_session, User, Bet, Event, Outcome, EventStatus
 from sqlalchemy import select
+from datetime import datetime
 
 router = Router()
 
@@ -21,6 +22,75 @@ def is_pending_bet(message: Message) -> bool:
             user_id in context.pending_bets and
             not message.text.startswith('/')
     )
+
+
+async def settle_event(event_id: int, bot):
+    """Расчет выигрышей по событию после его завершения и уведомление пользователей"""
+    async with get_session()() as session:
+        event = await session.get(Event, event_id)
+        if not event:
+            log(f"Событие {event_id} не найдено при расчете ставок")
+            return
+
+        bets_result = await session.execute(
+            select(Bet).where(Bet.event_id == event_id, Bet.settled == False)
+        )
+        bets = bets_result.scalars().all()
+
+        total_winners = 0
+        total_losers = 0
+        total_payout = 0
+
+        for bet in bets:
+            bet.win = (bet.choice == event.outcome)
+            bet.payout = int(bet.amount * bet.odds)
+            bet.settled = True
+
+            user = await session.get(User, bet.user_id)
+            if not user:
+                log(f"Пользователь {bet.user_id} не найден при расчете ставки {bet.id}")
+                continue
+
+            if bet.win:
+                user.balance += bet.payout
+                total_winners += 1
+                total_payout += bet.payout
+                try:
+                    await bot.send_message(
+                        user.tg_id,
+                        f"🎉 Вы выиграли!\n"
+                        f"📌 Событие: {event.event_title}\n"
+                        f"💰 Ставка: {bet.amount} баллов\n"
+                        f"📊 Коэффициент вашей ставки: x{bet.odds}\n"
+                        f"🏆 Победитель: {'Красные' if bet.choice == Outcome.RED else 'Черные'}\n"
+                        f"💵 Выигрыш: +{bet.payout} баллов\n"
+                        f"💳 Баланс: {user.balance} баллов"
+                    )
+                except Exception as e:
+                    log(f"Ошибка отправки сообщения победителю {user.tg_id}: {e}")
+            else:
+                total_losers += 1
+                try:
+                    await bot.send_message(
+                        user.tg_id,
+                        f"😔 К сожалению, вы проиграли\n"
+                        f"📌 Событие: {event.event_title}\n"
+                        f"💰 Ставка: {bet.amount} баллов\n"
+                        f"📊 Коэффициент вашей ставки: x{bet.odds}\n"
+                        f"🏆 Победитель: {'Красные' if event.outcome == Outcome.RED else 'Черные'}\n"
+                        f"💳 Баланс: {user.balance} баллов"
+                    )
+                except Exception as e:
+                    log(f"Ошибка отправки сообщения проигравшему {user.tg_id}: {e}")
+
+        event.status = EventStatus.RESOLVED
+        event.resolved_at = datetime.utcnow()
+        await session.commit()
+
+        log(
+            f"Событие {event_id} '{event.event_title}' завершено. "
+            f"Победителей: {total_winners}, Проигравших: {total_losers}, Выплачено: {total_payout}"
+        )
 
 
 @router.message(F.text == "🎰 Сделать ставку")
@@ -165,13 +235,13 @@ async def select_team(callback: CallbackQuery):
             await callback.message.answer(
                 f"🕶️💣 <b>Значит ты за Мафию ?</b> 💣🕶️\n\n"
                 f"Ночь на дворе, ставки высоки — покажи, сколько поставишь 💼💵\n\n"
-                f"💰 Введи сумму баллов для ставки:"
+                f"💰 Введи сумму баллов для ставки, коэффициент - {event.black_odds}X:"
             )
         elif team_name == "Красных":
             await callback.message.answer(
                 f"💥🏙️ <b>Ставишь на Мирных?</b> 🔥\n\n"
                 f"Пусть улицы зальются светом, а правда восторжествует! ⚖️\n\n"
-                f"💰 Введи сумму баллов, для ставки:"
+                f"💰 Введи сумму баллов, для ставки, коэффициент - {event.red_odds}X:"
             )
 
         await callback.answer()
@@ -241,7 +311,8 @@ async def enter_bet_amount(message: Message):
                 user_id=user.id,
                 event_id=event.id,
                 choice=choice,
-                amount=amount
+                odds=coefficient,
+                amount=amount,
             )
             session.add(bet)
 

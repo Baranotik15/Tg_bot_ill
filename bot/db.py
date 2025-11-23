@@ -99,6 +99,7 @@ class Bet(Base):
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id"))
     choice: Mapped[Outcome] = mapped_column(Enum(Outcome))
     amount: Mapped[int] = mapped_column(Integer)
+    odds: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     settled: Mapped[bool] = mapped_column(Boolean, default=False)
     win: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)

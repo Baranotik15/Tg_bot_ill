@@ -16,6 +16,7 @@ def main_menu(user_id: int) -> ReplyKeyboardMarkup:
         buttons.append([KeyboardButton(text="💳 Создать промокод")])
         buttons.append([KeyboardButton(text="⚡ Начать событие")])
         buttons.append([KeyboardButton(text="🏁 Завершить событие")])
+        buttons.append([KeyboardButton(text="🎯 Изменить коэффициент")])
         buttons.append([KeyboardButton(text="📢 Рассылка всем")])
 
     return ReplyKeyboardMarkup(
