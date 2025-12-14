@@ -1,32 +1,80 @@
 const tg = window.Telegram.WebApp;
-tg.ready();
+tg.expand();
 
-const initData = tg.initData;
+const API_BASE = "";
+
+const authHeader = tg.initData;
+
+async function api(path) {
+    const res = await fetch(`${API_BASE}${path}`, {
+        headers: {
+            "Authorization": authHeader
+        }
+    });
+    if (!res.ok) {
+        throw new Error(await res.text());
+    }
+    return res.json();
+}
 
 async function loadMe() {
-  const res = await fetch("/api/me", {
-    headers: {
-      "Authorization": initData
-    }
-  });
-  const data = await res.json();
-  document.getElementById("me").innerText =
-    `Баланс: ${data.balance}`;
+    const me = await api("/me");
+    document.getElementById("balance").innerText =
+        `💰 Баланс: ${me.balance} баллов`;
 }
 
 async function loadEvents() {
-  const res = await fetch("/api/events");
-  const events = await res.json();
+    const events = await api("/events");
+    const container = document.getElementById("events");
+    container.innerHTML = "";
 
-  const ul = document.getElementById("events");
-  ul.innerHTML = "";
+    if (events.length === 0) {
+        container.innerHTML =
+            `<div class="card">❌ Нет активных событий</div>`;
+        return;
+    }
 
-  events.forEach(e => {
-    const li = document.createElement("li");
-    li.innerText = `${e.title} 🔴x${e.red_odds} ⚫x${e.black_odds}`;
-    ul.appendChild(li);
-  });
+    for (const e of events) {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+            <div class="event-title">${e.title}</div>
+            <div>⏱ Осталось: ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
+
+            <button class="red" onclick="placeBet(${e.id}, 'red', ${e.red_odds})">
+                🔴 Красные ×${e.red_odds}
+            </button>
+
+            <button class="black" onclick="placeBet(${e.id}, 'black', ${e.black_odds})">
+                ⚫ Черные ×${e.black_odds}
+            </button>
+        `;
+
+        container.appendChild(card);
+    }
 }
 
-loadMe();
-loadEvents();
+function placeBet(eventId, team, odds) {
+    const amount = prompt(`Введите сумму ставки (коэф ×${odds})`);
+    if (!amount) return;
+
+    tg.sendData(JSON.stringify({
+        action: "bet",
+        event_id: eventId,
+        team: team,
+        amount: Number(amount)
+    }));
+
+    alert("Ставка отправлена в бот");
+}
+
+(async () => {
+    try {
+        await loadMe();
+        await loadEvents();
+    } catch (e) {
+        alert("Ошибка загрузки данных");
+        console.error(e);
+    }
+})();
