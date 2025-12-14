@@ -1,4 +1,4 @@
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from bot import context
 
 
@@ -7,8 +7,22 @@ def main_menu(user_id: int) -> ReplyKeyboardMarkup:
     Формируем основное меню. Если пользователь админ — добавляем админские кнопки.
     """
     buttons = [
-        [KeyboardButton(text="🎰 Сделать ставку"), KeyboardButton(text="🏆 Рейтинг")],
-        [KeyboardButton(text="📊 Мой рейтинг"), KeyboardButton(text="🎁 Промокод")],
+        [
+            KeyboardButton(text="🎰 Сделать ставку"),
+            KeyboardButton(text="🏆 Рейтинг"),
+        ],
+        [
+            KeyboardButton(text="📊 Мой рейтинг"),
+            KeyboardButton(text="🎁 Промокод"),
+        ],
+        [
+            KeyboardButton(
+                text="🌐 Веб-ставки",
+                web_app=WebAppInfo(
+                    url="http://18.195.165.10:8080"
+                )
+            )
+        ]
     ]
 
     settings = context.settings
