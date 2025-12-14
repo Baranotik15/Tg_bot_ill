@@ -17,11 +17,8 @@ from bot.db import (
 )
 from bot import context
 
-app = FastAPI(title="Bet Web API")
+app = FastAPI(title="MafBot Web API")
 
-# =====================
-# Web (HTML / JS)
-# =====================
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 WEB_DIR = os.path.join(BASE_DIR, "web")
@@ -33,10 +30,6 @@ app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 def index():
     return FileResponse(os.path.join(WEB_DIR, "index.html"))
 
-
-# =====================
-# Telegram WebApp auth
-# =====================
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> dict:
     data = dict(parse_qsl(init_data, strict_parsing=True))
@@ -58,10 +51,6 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> dict:
 
     return data
 
-
-# =====================
-# API
-# =====================
 
 @app.get("/me")
 async def get_me(authorization: Optional[str] = Header(None)):

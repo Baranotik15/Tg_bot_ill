@@ -1,5 +1,15 @@
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from bot import context
+import dotenv
+import os
+
+
+dotenv.load_dotenv()
+
+web_url = os.getenv("WEB_URL")
+
+if not web_url:
+    raise RuntimeError("WEB_URL is not set in environment")
 
 
 def main_menu(user_id: int) -> ReplyKeyboardMarkup:
@@ -19,7 +29,7 @@ def main_menu(user_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(
                 text="🌐 Веб-ставки",
                 web_app=WebAppInfo(
-                    url="http://18.195.165.10:8080"
+                    url=web_url
                 )
             )
         ]
