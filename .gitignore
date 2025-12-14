@@ -31,3 +31,4 @@ dumps/
 data/
 node_modules/
 .DS_Store
+telegram-bot-key.pem

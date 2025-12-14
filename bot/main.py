@@ -1,6 +1,9 @@
 import asyncio
 import os
 
+import uvicorn
+from api.main import app
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -48,6 +51,10 @@ async def main() -> None:
     asyncio.create_task(hourly_dump(settings))
 
     audit(logger, "bot_start", {})
+
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
+    server = uvicorn.Server(config)
+    asyncio.create_task(server.serve())
 
     await dp.start_polling(bot)
 
