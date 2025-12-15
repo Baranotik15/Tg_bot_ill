@@ -13,11 +13,17 @@ const modalContent = document.getElementById("modal-content");
 
 async function api(path, options = {}) {
     const res = await fetch(path, {
+        ...options,
         credentials: "same-origin",
-        headers: { ...HEADERS, ...options.headers },
-        ...options
+        headers: {
+            ...HEADERS,
+            ...(options.headers || {})
+        }
     });
-    if (!res.ok) throw new Error(await res.text());
+
+    if (!res.ok) {
+        throw new Error(await res.text());
+    }
     return res.json();
 }
 
@@ -61,15 +67,25 @@ function openCreateModal() {
 }
 
 async function submitCreate() {
+    const title = document.getElementById("title").value.trim();
+    const red = Number(document.getElementById("red").value);
+    const black = Number(document.getElementById("black").value);
+
+    if (!title || red <= 0 || black <= 0) {
+        alert("Заполни все поля корректно");
+        return;
+    }
+
     await api("/admin/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            title: document.getElementById("title").value,
-            red_odds: document.getElementById("red").value,
-            black_odds: document.getElementById("black").value
+            title,
+            red_odds: red,
+            black_odds: black
         })
     });
+
     closeModal();
     alert("Событие успешно создано");
     loadEvents();
@@ -89,6 +105,7 @@ async function finishEvent(id, winner) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ winner })
     });
+
     closeModal();
     alert("Событие успешно завершено");
     document.getElementById(`event-${id}`)?.remove();
@@ -111,6 +128,7 @@ async function loadEvents() {
             <button class="black">⚫ x${e.black_odds}</button>
             ${IS_ADMIN ? `<button class="admin" onclick="openFinishModal(${e.id})">Завершить</button>` : ""}
         `;
+
         container.appendChild(card);
     }
 }
