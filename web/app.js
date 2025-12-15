@@ -1,46 +1,24 @@
-// Инициализация Telegram WebApp
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// ✅ СНАЧАЛА получаем initData
 const initData = tg.initData;
 
-// 🔍 ЛОГ В КОНСОЛЬ (Telegram WebView)
-console.log("Telegram initData:", initData);
-
-// 🔍 СРАЗУ отправляем на сервер
-fetch("/debug-init", {
-    method: "POST",
-    headers: {
-        "Content-Type": "text/plain"
-    },
-    body: initData || "EMPTY_INIT_DATA"
-});
-
-// API на том же домене
-const API_BASE = "";
-
 if (!initData) {
-    alert("❌ initData НЕ получен. Открой WebApp ТОЛЬКО через кнопку в Telegram.");
+    alert("❌ Открой WebApp только через кнопку в Telegram");
+    throw new Error("initData empty");
 }
 
-// Универсальный запрос
+// URL-encode initData
+const encodedInitData = encodeURIComponent(initData);
+
+// API helper
 async function api(path) {
-    // Дублируем initData: в заголовки и в query — чтобы обойти Cloudflare/прокси
-    const url = new URL(`${API_BASE}${path}`, window.location.origin);
-    url.searchParams.set("init_data_query", initData || "");
+    const url = `${path}?init_data_query=${encodedInitData}`;
 
-    const res = await fetch(url.toString(), {
-        headers: {
-            "X-Telegram-Init-Data": initData || "",
-            "Authorization": initData || ""
-        }
-    });
-
+    const res = await fetch(url);
     if (!res.ok) {
         throw new Error(await res.text());
     }
-
     return res.json();
 }
 
@@ -78,7 +56,7 @@ async function loadEvents() {
         await loadMe();
         await loadEvents();
     } catch (e) {
-        console.error("WEB ERROR:", e);
+        console.error(e);
         alert("❌ Ошибка загрузки данных");
     }
 })();
