@@ -11,12 +11,11 @@ import time
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot import context
 from bot.db import get_session, User, Event, EventStatus, Outcome
 from bot.handlers.betting import settle_event
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
 
 app = FastAPI(title="MafBot Web API")
 
@@ -31,7 +30,10 @@ def index():
     return FileResponse(os.path.join(WEB_DIR, "index.html"))
 
 
-def verify_init_data(init_data: str, bot_token: str) -> dict:
+def verify_init_data(init_data: Optional[str], bot_token: str) -> dict:
+    if not init_data:
+        raise HTTPException(status_code=401)
+
     data = dict(parse_qsl(init_data))
     hash_received = data.pop("hash", None)
     if not hash_received:
@@ -62,9 +64,6 @@ def verify_init_data(init_data: str, bot_token: str) -> dict:
 
 
 def get_admin_id(tg_init_data: Optional[str]) -> int:
-    if not tg_init_data:
-        raise HTTPException(status_code=401)
-
     settings = context.settings
     assert settings is not None
 
@@ -107,7 +106,6 @@ async def get_events(
 ):
     settings = context.settings
     assert settings is not None
-
     verify_init_data(tg_init_data, settings.bot_token)
 
     async with get_session()() as session:
@@ -135,11 +133,17 @@ async def create_event(
 ):
     get_admin_id(tg_init_data)
 
-    title = payload.get("title")
-    red_odds = float(payload.get("red_odds", 0))
-    black_odds = float(payload.get("black_odds", 0))
+    title = (payload.get("title") or "").strip()
+    red_odds = payload.get("red_odds")
+    black_odds = payload.get("black_odds")
 
-    if not title or red_odds <= 0 or black_odds <= 0:
+    try:
+        red_odds_f = float(red_odds)
+        black_odds_f = float(black_odds)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400)
+
+    if not title or red_odds_f <= 0 or black_odds_f <= 0:
         raise HTTPException(status_code=400)
 
     now = datetime.utcnow()
@@ -149,10 +153,10 @@ async def create_event(
         event = Event(
             event_title=title,
             name=f"Ставка {now.strftime('%Y-%m-%d %H:%M:%S')}",
-            description=f"{title} - Красные: {red_odds} / Черные: {black_odds}",
+            description=f"{title} - Красные: {red_odds_f} / Черные: {black_odds_f}",
             status=EventStatus.OPEN,
-            red_odds=red_odds,
-            black_odds=black_odds,
+            red_odds=red_odds_f,
+            black_odds=black_odds_f,
             betting_starts_at=now,
             betting_ends_at=betting_ends_at
         )
@@ -160,20 +164,25 @@ async def create_event(
         await session.commit()
         await session.refresh(event)
 
-        users = (await session.execute(select(User))).scalars().all()
+        users_result = await session.execute(select(User))
+        users = users_result.scalars().all()
 
+    # ✅ Рассылка всем пользователям как при создании в боте
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[
             InlineKeyboardButton(
-                text=f"🔴 Красные x{red_odds}",
+                text=f"🔴 Красные x{red_odds_f}",
                 callback_data=f"bet_red:{event.id}"
             ),
             InlineKeyboardButton(
-                text=f"⚫ Черные x{black_odds}",
+                text=f"⚫ Черные x{black_odds_f}",
                 callback_data=f"bet_black:{event.id}"
             )
         ]]
     )
+
+    sent_count = 0
+    failed_count = 0
 
     for u in users:
         try:
@@ -182,11 +191,21 @@ async def create_event(
                 f"🎲 <b>Начался матч!</b>\n\n"
                 f"📌 <b>{title}</b>\n\n"
                 f"⏱ Время на ставки: <b>10 минут</b>\n"
-                f"💳 Ваш баланс: <b>{u.balance}</b>",
+                f"🎰 Выберите на что поставить:\n\n"
+                f"💳 Ваш баланс:<code><b>{u.balance}</b></code> баллов",
                 reply_markup=keyboard
             )
-        except Exception:
-            pass
+            sent_count += 1
+        except Exception as e:
+            failed_count += 1
+            if hasattr(context, "logger"):
+                context.logger.warning(f"[WEB][EVENT] notify failed for user {u.tg_id}: {e}")
+
+    if hasattr(context, "logger"):
+        context.logger.info(
+            f"[WEB][EVENT] Created event {event.id} title='{title}' red={red_odds_f} black={black_odds_f} "
+            f"notified={sent_count} failed={failed_count}"
+        )
 
     return {"ok": True, "event_id": event.id}
 
@@ -203,14 +222,21 @@ async def finish_event(
     if winner not in ("red", "black"):
         raise HTTPException(status_code=400)
 
+    # ✅ Делаем как в боте: ставим outcome и вызываем settle_event
     async with get_session()() as session:
         event = await session.get(Event, event_id)
-        if not event or event.status != EventStatus.OPEN:
+        if not event:
             raise HTTPException(status_code=404)
 
+        # если уже завершено (outcome выставлен)
+        if event.outcome is not None:
+            raise HTTPException(status_code=400, detail="Event already finished")
+
         event.outcome = Outcome.RED if winner == "red" else Outcome.BLACK
-        event.status = EventStatus.FINISHED
         await session.commit()
 
+    # ✅ ВСЯ логика выплат + сообщения тем кто выиграл — внутри settle_event
     await settle_event(event_id, context.bot)
+
+    # ✅ В вебе админу просто ok (а фронт покажет alert)
     return {"ok": True}
