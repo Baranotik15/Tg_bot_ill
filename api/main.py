@@ -65,6 +65,8 @@ def get_admin_id(tg_init_data: Optional[str]) -> int:
         raise HTTPException(status_code=401)
 
     settings = context.settings
+    assert settings is not None
+
     data = verify_init_data(tg_init_data, settings.bot_token)
     user = json.loads(data["user"])
     tg_id = int(user["id"])
@@ -80,6 +82,8 @@ async def get_me(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
     settings = context.settings
+    assert settings is not None
+
     data = verify_init_data(tg_init_data, settings.bot_token)
     user_data = json.loads(data["user"])
     tg_id = int(user_data["id"])
@@ -101,6 +105,7 @@ async def get_events(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
     settings = context.settings
+    assert settings is not None
     verify_init_data(tg_init_data, settings.bot_token)
 
     async with get_session()() as session:
@@ -156,18 +161,16 @@ async def create_event(
         users = (await session.execute(select(User))).scalars().all()
 
     keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"🔴 Красные x{red_odds}",
-                    callback_data=f"bet_red:{event.id}"
-                ),
-                InlineKeyboardButton(
-                    text=f"⚫ Черные x{black_odds}",
-                    callback_data=f"bet_black:{event.id}"
-                )
-            ]
-        ]
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text=f"🔴 Красные x{red_odds}",
+                callback_data=f"bet_red:{event.id}"
+            ),
+            InlineKeyboardButton(
+                text=f"⚫ Черные x{black_odds}",
+                callback_data=f"bet_black:{event.id}"
+            )
+        ]]
     )
 
     sent = 0
@@ -180,7 +183,6 @@ async def create_event(
                 f"🎲 <b>Начался матч!</b>\n\n"
                 f"📌 <b>{title}</b>\n\n"
                 f"⏱ Время на ставки: <b>10 минут</b>\n"
-                f"🎰 Выберите на что поставить:\n\n"
                 f"💳 Ваш баланс: <b>{u.balance}</b>",
                 reply_markup=keyboard
             )
@@ -214,7 +216,6 @@ async def finish_event(
             raise HTTPException(status_code=404)
 
         event.outcome = Outcome.RED if winner == "red" else Outcome.BLACK
-        event.status = EventStatus.CLOSED
         await session.commit()
 
     await settle_event(event_id, context.bot)
