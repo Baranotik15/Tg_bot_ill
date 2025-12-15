@@ -27,24 +27,33 @@ def index():
 
 
 def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
-    data = dict(parse_qsl(init_data, strict_parsing=True))
+    data = dict(parse_qsl(init_data))
     hash_received = data.pop("hash", None)
 
     if not hash_received:
         raise HTTPException(status_code=403, detail="Missing hash")
 
+    data.pop("signature", None)
+
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
-    secret_key = hashlib.sha256(bot_token.encode()).digest()
+
+    secret_key = hmac.new(
+        b"WebAppData",
+        bot_token.encode(),
+        hashlib.sha256
+    ).digest()
+
     hash_calculated = hmac.new(
         secret_key,
         data_check_string.encode(),
-        hashlib.sha256,
+        hashlib.sha256
     ).hexdigest()
 
     if hash_calculated != hash_received:
         raise HTTPException(status_code=403, detail="Invalid Telegram hash")
 
     return data
+
 
 
 @app.get("/me")
