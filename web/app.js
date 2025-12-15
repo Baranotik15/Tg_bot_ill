@@ -1,24 +1,24 @@
-// Telegram WebApp init
+// Инициализация Telegram WebApp
 const tg = window.Telegram.WebApp;
 tg.expand();
 
 // API находится на том же домене
 const API_BASE = "";
 
-// Берём initData
-const initData = tg.initData || "";
+// initData — ЭТО КЛЮЧЕВО
+const initData = tg.initData;
 
-// Жёсткая проверка: WebApp открыт НЕ из Telegram
 if (!initData) {
-    alert("❌ WebApp открыт не из Telegram.\nОткрой через кнопку в боте.");
-    throw new Error("No Telegram initData");
+    alert("❌ initData не получен. Открой WebApp ТОЛЬКО из Telegram.");
+    console.error("initData is empty");
 }
 
-// Универсальный API-запрос
+// Универсальный запрос к API
 async function api(path) {
     const res = await fetch(`${API_BASE}${path}`, {
         method: "GET",
         headers: {
+            // ВАЖНО: имя заголовка
             "X-Telegram-Init-Data": initData
         }
     });
@@ -34,14 +34,24 @@ async function api(path) {
 // Загрузка пользователя
 async function loadMe() {
     const me = await api("/me");
-    document.getElementById("balance").innerText =
-        `💰 Баланс: ${me.balance}`;
+
+    const balanceEl = document.getElementById("balance");
+    if (!balanceEl) {
+        throw new Error("Element #balance not found");
+    }
+
+    balanceEl.innerText = `💰 Баланс: ${me.balance}`;
 }
 
 // Загрузка событий
 async function loadEvents() {
     const events = await api("/events");
     const container = document.getElementById("events");
+
+    if (!container) {
+        throw new Error("Element #events not found");
+    }
+
     container.innerHTML = "";
 
     if (!events || events.length === 0) {
@@ -54,29 +64,33 @@ async function loadEvents() {
         const card = document.createElement("div");
         card.className = "card";
 
-        const minutes = Math.floor(e.time_left / 60);
-        const seconds = String(e.time_left % 60).padStart(2, "0");
-
         card.innerHTML = `
             <div class="event-title">${e.title}</div>
-            <div>⏱ Осталось: ${minutes}:${seconds}</div>
+            <div>⏱ Осталось: ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
 
-            <button class="red" onclick="placeBet(${e.id}, 'red', ${e.red_odds})">
+            <button class="red">
                 🔴 Красные ×${e.red_odds}
             </button>
 
-            <button class="black" onclick="placeBet(${e.id}, 'black', ${e.black_odds})">
+            <button class="black">
                 ⚫ Черные ×${e.black_odds}
             </button>
         `;
+
+        // обработчики
+        card.querySelector(".red").onclick = () =>
+            placeBet(e.id, "red", e.red_odds);
+
+        card.querySelector(".black").onclick = () =>
+            placeBet(e.id, "black", e.black_odds);
 
         container.appendChild(card);
     }
 }
 
-// Отправка ставки в бот
+// Отправка ставки в бота
 function placeBet(eventId, team, odds) {
-    const amount = prompt(`Введите сумму ставки (коэф ×${odds})`);
+    const amount = prompt(`Введите сумму ставки (×${odds})`);
     if (!amount) return;
 
     tg.sendData(JSON.stringify({
@@ -89,13 +103,15 @@ function placeBet(eventId, team, odds) {
     alert("✅ Ставка отправлена в бот");
 }
 
-// Старт приложения
+// Точка входа
 (async () => {
     try {
+        console.log("Telegram initData:", initData);
+
         await loadMe();
         await loadEvents();
     } catch (err) {
-        console.error(err);
-        alert("❌ Ошибка загрузки данных.\nСмотри логи сервера.");
+        console.error("WEB ERROR:", err);
+        alert("❌ Ошибка загрузки данных. Смотри логи сервера.");
     }
 })();
