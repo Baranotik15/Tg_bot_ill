@@ -72,8 +72,9 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> dict:
 async def get_me(
     authorization: Optional[str] = Header(None),
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
+    init_data_query: Optional[str] = None,
 ):
-    init_data = (tg_init_data or authorization or "").strip()
+    init_data = (tg_init_data or authorization or init_data_query or "").strip()
     if not init_data:
         raise HTTPException(status_code=401, detail="Missing auth")
 

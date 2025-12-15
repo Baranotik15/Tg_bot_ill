@@ -18,8 +18,9 @@ async function api(path) {
     const res = await fetch(`${API_BASE}${path}`, {
         method: "GET",
         headers: {
-            // ВАЖНО: имя заголовка
-            "X-Telegram-Init-Data": initData
+            // Дублируем в два заголовка: некоторые прокси режут кастомные X-*
+            "X-Telegram-Init-Data": initData,
+            "Authorization": initData
         }
     });
 
