@@ -6,7 +6,7 @@ if (!initData) {
     throw new Error("initData empty");
 }
 
-const API_HEADERS = {
+const HEADERS = {
     "X-Telegram-Init-Data": initData
 };
 
@@ -15,7 +15,7 @@ let timerInterval = null;
 
 async function api(path) {
     const res = await fetch(path, {
-        headers: API_HEADERS,
+        headers: HEADERS,
         credentials: "same-origin"
     });
 
@@ -32,37 +32,47 @@ async function loadMe() {
 
 async function loadEvents() {
     const events = await api("/events");
-    const container = document.getElementById("events");
-    container.innerHTML = "";
-
-    eventsCache.clear();
 
     for (const e of events) {
-        eventsCache.set(e.id, {
-            ...e,
-            time_left: e.time_left
-        });
+        const cached = eventsCache.get(e.id);
 
-        const card = document.createElement("div");
-        card.className = "card";
-        card.id = `event-${e.id}`;
-        card.innerHTML = `
-            <div class="event-title">${e.title}</div>
-            <div class="time" id="time-${e.id}"></div>
-            <button class="red">🔴 Красные ×${e.red_odds}</button>
-            <button class="black">⚫ Черные ×${e.black_odds}</button>
-        `;
+        if (!cached) {
+            createEventCard(e);
+            eventsCache.set(e.id, { ...e });
+        } else {
+            cached.red_odds = e.red_odds;
+            cached.black_odds = e.black_odds;
+            cached.time_left = Math.min(cached.time_left, e.time_left);
 
-        container.appendChild(card);
+            updateEventUI(e.id, cached);
+        }
     }
+}
 
-    startTimer();
+function createEventCard(e) {
+    const container = document.getElementById("events");
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.id = `event-${e.id}`;
+
+    card.innerHTML = `
+        <div class="event-title">${e.title}</div>
+        <div class="time" id="time-${e.id}"></div>
+        <button class="red" id="red-${e.id}">🔴 Красные ×${e.red_odds}</button>
+        <button class="black" id="black-${e.id}">⚫ Черные ×${e.black_odds}</button>
+    `;
+
+    container.appendChild(card);
+}
+
+function updateEventUI(id, e) {
+    document.getElementById(`red-${id}`).innerText = `🔴 Красные ×${e.red_odds}`;
+    document.getElementById(`black-${id}`).innerText = `⚫ Черные ×${e.black_odds}`;
 }
 
 function startTimer() {
-    if (timerInterval) {
-        clearInterval(timerInterval);
-    }
+    if (timerInterval) return;
 
     timerInterval = setInterval(() => {
         for (const [id, e] of eventsCache.entries()) {
@@ -85,12 +95,13 @@ function startTimer() {
     }, 1000);
 }
 
-function startPolling() {
+function startFastPolling() {
     loadMe();
     loadEvents();
+    startTimer();
 
-    setInterval(loadMe, 10000);
-    setInterval(loadEvents, 10000);
+    setInterval(loadMe, 2000);
+    setInterval(loadEvents, 2000);
 }
 
-startPolling();
+startFastPolling();
