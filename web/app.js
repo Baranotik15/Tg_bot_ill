@@ -1,3 +1,5 @@
+alert("JS v999 LOADED");
+
 const tg = window.Telegram.WebApp;
 tg.expand();
 
