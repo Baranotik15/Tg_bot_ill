@@ -39,9 +39,7 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
     if time.time() - auth_date > 86400:
         raise HTTPException(status_code=403)
 
-    data_check_string = "\n".join(
-        f"{k}={v}" for k, v in sorted(data.items())
-    )
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
 
     secret_key = hmac.new(
         b"WebAppData",
@@ -59,6 +57,10 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
         raise HTTPException(status_code=403)
 
     return data
+
+
+def get_admin_ids():
+    return set(map(int, os.getenv("ADMIN_IDS", "").split(",")))
 
 
 @app.get("/me")
@@ -84,7 +86,7 @@ async def get_me(
             "tg_id": user.tg_id,
             "username": user.username,
             "balance": user.balance,
-            "is_admin": tg_id in settings.ADMIN_IDS,
+            "is_admin": tg_id in get_admin_ids(),
         }
 
 
@@ -133,7 +135,7 @@ async def create_event(
     user_data = json.loads(data["user"])
     tg_id = int(user_data["id"])
 
-    if tg_id not in settings.ADMIN_IDS:
+    if tg_id not in get_admin_ids():
         raise HTTPException(status_code=403)
 
     now = datetime.utcnow()
@@ -161,4 +163,3 @@ async def create_event(
             "black_odds": event.black_odds,
             "time_left": int((betting_ends_at - now).total_seconds()),
         }
-
