@@ -1,20 +1,20 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// Берём initData строго из Telegram
 const initData = tg.initData;
 
 if (!initData) {
-    alert("❌ Открой WebApp только через кнопку в Telegram");
+    alert("Открой WebApp через кнопку в Telegram");
     throw new Error("initData empty");
 }
 
-// API helper — ТОЛЬКО через Header
 async function api(path) {
     const res = await fetch(path, {
+        method: "GET",
         headers: {
             "X-Telegram-Init-Data": initData
-        }
+        },
+        credentials: "same-origin"
     });
 
     if (!res.ok) {
@@ -25,8 +25,7 @@ async function api(path) {
 
 async function loadMe() {
     const me = await api("/me");
-    document.getElementById("balance").innerText =
-        `💰 Баланс: ${me.balance}`;
+    document.getElementById("balance").innerText = `💰 Баланс: ${me.balance}`;
 }
 
 async function loadEvents() {
@@ -58,6 +57,6 @@ async function loadEvents() {
         await loadEvents();
     } catch (e) {
         console.error(e);
-        alert("❌ Ошибка загрузки данных");
+        alert("Ошибка загрузки данных");
     }
 })();
