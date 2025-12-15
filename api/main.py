@@ -79,7 +79,8 @@ async def get_me(
 
     if logger:
         logger.info(
-            "[/me] headers=%s auth=%s x_tg=%s query=%s",
+            "[/me] url=%s headers=%s auth=%s x_tg=%s query=%s",
+            str(request.url),
             dict(request.headers),
             authorization,
             tg_init_data,
