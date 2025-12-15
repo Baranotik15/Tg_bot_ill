@@ -26,10 +26,14 @@ if (!initData) {
 
 // Универсальный запрос
 async function api(path) {
-    const res = await fetch(`${API_BASE}${path}`, {
+    // Дублируем initData: в заголовки и в query — чтобы обойти Cloudflare/прокси
+    const url = new URL(`${API_BASE}${path}`, window.location.origin);
+    url.searchParams.set("init_data_query", initData || "");
+
+    const res = await fetch(url.toString(), {
         headers: {
-            "X-Telegram-Init-Data": initData,
-            "Authorization": initData
+            "X-Telegram-Init-Data": initData || "",
+            "Authorization": initData || ""
         }
     });
 
