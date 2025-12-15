@@ -2,6 +2,15 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
+// DEBUG: отправляем initData на сервер сразу
+fetch("/debug-init", {
+    method: "POST",
+    headers: {
+        "Content-Type": "text/plain"
+    },
+    body: initData || "EMPTY_INIT_DATA"
+});
+
 // API находится на том же домене
 const API_BASE = "";
 
