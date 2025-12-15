@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot import context
 from bot.db import get_session, User, Event, EventStatus, Outcome
@@ -64,8 +65,6 @@ def get_admin_id(tg_init_data: Optional[str]) -> int:
         raise HTTPException(status_code=401)
 
     settings = context.settings
-    assert settings is not None
-
     data = verify_init_data(tg_init_data, settings.bot_token)
     user = json.loads(data["user"])
     tg_id = int(user["id"])
@@ -81,8 +80,6 @@ async def get_me(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
     settings = context.settings
-    assert settings is not None
-
     data = verify_init_data(tg_init_data, settings.bot_token)
     user_data = json.loads(data["user"])
     tg_id = int(user_data["id"])
@@ -104,7 +101,6 @@ async def get_events(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
     settings = context.settings
-    assert settings is not None
     verify_init_data(tg_init_data, settings.bot_token)
 
     async with get_session()() as session:
@@ -133,10 +129,10 @@ async def create_event(
     get_admin_id(tg_init_data)
 
     title = payload.get("title")
-    red_odds = payload.get("red_odds")
-    black_odds = payload.get("black_odds")
+    red_odds = float(payload.get("red_odds", 0))
+    black_odds = float(payload.get("black_odds", 0))
 
-    if not title or float(red_odds) <= 0 or float(black_odds) <= 0:
+    if not title or red_odds <= 0 or black_odds <= 0:
         raise HTTPException(status_code=400)
 
     now = datetime.utcnow()
@@ -148,8 +144,8 @@ async def create_event(
             name=f"Event {now.strftime('%Y-%m-%d %H:%M:%S')}",
             description=title,
             status=EventStatus.OPEN,
-            red_odds=float(red_odds),
-            black_odds=float(black_odds),
+            red_odds=red_odds,
+            black_odds=black_odds,
             betting_starts_at=now,
             betting_ends_at=betting_ends_at
         )
@@ -158,6 +154,21 @@ async def create_event(
         await session.refresh(event)
 
         users = (await session.execute(select(User))).scalars().all()
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"🔴 Красные x{red_odds}",
+                    callback_data=f"bet_red:{event.id}"
+                ),
+                InlineKeyboardButton(
+                    text=f"⚫ Черные x{black_odds}",
+                    callback_data=f"bet_black:{event.id}"
+                )
+            ]
+        ]
+    )
 
     sent = 0
     failed = 0
@@ -169,7 +180,9 @@ async def create_event(
                 f"🎲 <b>Начался матч!</b>\n\n"
                 f"📌 <b>{title}</b>\n\n"
                 f"⏱ Время на ставки: <b>10 минут</b>\n"
-                f"💳 Ваш баланс: <b>{u.balance}</b>"
+                f"🎰 Выберите на что поставить:\n\n"
+                f"💳 Ваш баланс: <b>{u.balance}</b>",
+                reply_markup=keyboard
             )
             sent += 1
         except Exception:
@@ -177,8 +190,7 @@ async def create_event(
 
     if hasattr(context, "logger"):
         context.logger.info(
-            f"[WEB][EVENT] Created event {event.id} title='{title}' red={red_odds} black={black_odds} "
-            f"notified={sent} failed={failed}"
+            f"[WEB][EVENT] Created event {event.id} title='{title}' red={red_odds} black={black_odds} notified={sent} failed={failed}"
         )
 
     return {"ok": True, "event_id": event.id}
@@ -198,16 +210,12 @@ async def finish_event(
 
     async with get_session()() as session:
         event = await session.get(Event, event_id)
-        if not event:
+        if not event or event.status != EventStatus.OPEN:
             raise HTTPException(status_code=404)
-
-        if event.status != EventStatus.OPEN:
-            raise HTTPException(status_code=400)
 
         event.outcome = Outcome.RED if winner == "red" else Outcome.BLACK
         event.status = EventStatus.CLOSED
         await session.commit()
 
     await settle_event(event_id, context.bot)
-
     return {"ok": True}
