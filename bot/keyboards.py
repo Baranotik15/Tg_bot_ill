@@ -24,14 +24,6 @@ def main_menu(user_id: int) -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text="📊 Мой рейтинг"),
             KeyboardButton(text="🎁 Промокод"),
-        ],
-        [
-            KeyboardButton(
-                text="🌐 Веб-ставки",
-                web_app=WebAppInfo(
-                    url=web_url
-                )
-            )
         ]
     ]
 

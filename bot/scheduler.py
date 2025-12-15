@@ -21,5 +21,5 @@ async def hourly_dump(settings: Settings) -> None:
 				shutil.copyfile(path, target)
 		except Exception:
 			pass
-		# Sleep 1 hour for make dump
+		# Sleep 1 day for make dump
 		await asyncio.sleep(3600 * 24)
