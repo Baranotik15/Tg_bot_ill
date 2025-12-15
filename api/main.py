@@ -8,13 +8,12 @@ from urllib.parse import parse_qsl
 import os
 import json
 import time
-from datetime import datetime, timedelta
 
 from sqlalchemy import select
+from datetime import datetime, timedelta
 
 from bot.db import get_session, User, Event, EventStatus, Outcome
 from bot import context
-from bot.handlers.betting import settle_event
 
 app = FastAPI(title="MafBot Web API")
 
@@ -31,6 +30,7 @@ def index():
 
 def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
     data = dict(parse_qsl(init_data))
+
     hash_received = data.pop("hash", None)
     if not hash_received:
         raise HTTPException(status_code=403)
@@ -40,8 +40,18 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
         raise HTTPException(status_code=403)
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
-    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-    hash_calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+    secret_key = hmac.new(
+        b"WebAppData",
+        bot_token.encode(),
+        hashlib.sha256
+    ).digest()
+
+    hash_calculated = hmac.new(
+        secret_key,
+        data_check_string.encode(),
+        hashlib.sha256
+    ).hexdigest()
 
     if hash_calculated != hash_received:
         raise HTTPException(status_code=403)
@@ -49,14 +59,13 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
     return data
 
 
-def get_admin_ids():
-    return set(map(int, os.getenv("ADMIN_IDS", "").split(",")))
-
-
 @app.get("/me")
 async def get_me(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
+    if not tg_init_data:
+        raise HTTPException(status_code=401)
+
     settings = context.settings
     assert settings is not None
 
@@ -71,8 +80,9 @@ async def get_me(
 
         return {
             "tg_id": user.tg_id,
+            "username": user.username,
             "balance": user.balance,
-            "is_admin": tg_id in get_admin_ids(),
+            "is_admin": tg_id in settings.admin_ids,
         }
 
 
@@ -80,6 +90,9 @@ async def get_me(
 async def get_events(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
+    if not tg_init_data:
+        raise HTTPException(status_code=401)
+
     settings = context.settings
     assert settings is not None
 
@@ -109,6 +122,9 @@ async def create_event(
     payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
+    if not tg_init_data:
+        raise HTTPException(status_code=401)
+
     settings = context.settings
     assert settings is not None
 
@@ -116,30 +132,32 @@ async def create_event(
     user = json.loads(data["user"])
     tg_id = int(user["id"])
 
-    if tg_id not in get_admin_ids():
+    if tg_id not in settings.admin_ids:
         raise HTTPException(status_code=403)
 
-    title = payload["title"]
-    red_odds = float(payload["red_odds"])
-    black_odds = float(payload["black_odds"])
+    title = payload.get("title")
+    red_odds = float(payload.get("red_odds"))
+    black_odds = float(payload.get("black_odds"))
 
     now = datetime.utcnow()
+    betting_ends_at = now + timedelta(minutes=10)
 
     async with get_session()() as session:
         event = Event(
             event_title=title,
-            name=title,
-            description=title,
+            name=f"Event {now.strftime('%Y-%m-%d %H:%M:%S')}",
+            description="WebApp",
             status=EventStatus.OPEN,
             red_odds=red_odds,
             black_odds=black_odds,
             betting_starts_at=now,
-            betting_ends_at=now + timedelta(minutes=10),
+            betting_ends_at=betting_ends_at,
         )
         session.add(event)
         await session.commit()
+        await session.refresh(event)
 
-    return {"ok": True}
+        return {"ok": True, "id": event.id}
 
 
 @app.post("/admin/events/{event_id}/finish")
@@ -148,6 +166,9 @@ async def finish_event(
     payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
+    if not tg_init_data:
+        raise HTTPException(status_code=401)
+
     settings = context.settings
     assert settings is not None
 
@@ -155,7 +176,7 @@ async def finish_event(
     user = json.loads(data["user"])
     tg_id = int(user["id"])
 
-    if tg_id not in get_admin_ids():
+    if tg_id not in settings.admin_ids:
         raise HTTPException(status_code=403)
 
     winner = payload.get("winner")
@@ -165,9 +186,8 @@ async def finish_event(
         if not event or event.status != EventStatus.OPEN:
             raise HTTPException(status_code=404)
 
+        event.status = EventStatus.CLOSED
         event.outcome = Outcome.RED if winner == "red" else Outcome.BLACK
         await session.commit()
-
-    await settle_event(event_id, context.bot)
 
     return {"ok": True}
