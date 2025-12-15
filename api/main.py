@@ -50,22 +50,24 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
 @app.get("/me")
 async def get_me(
     request: Request,
-    authorization: Optional[str] = Header(None),
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
-    init_data_query: Optional[str] = None,
 ):
-    init_data = (tg_init_data or authorization or init_data_query or "").strip()
-    if not init_data:
-        raise HTTPException(status_code=401, detail="Missing auth")
+    if not tg_init_data:
+        raise HTTPException(status_code=401, detail="Missing Telegram init data")
 
     settings = context.settings
     logger = context.logger
     assert settings is not None
 
     try:
-        data = verify_telegram_webapp_init_data(init_data, settings.bot_token)
+        # 🔍 временно логируем сырой initData
+        if logger:
+            logger.info("TG INIT DATA RAW: %s", tg_init_data)
+
+        data = verify_telegram_webapp_init_data(tg_init_data, settings.bot_token)
         user_data = json.loads(data["user"])
         tg_id = int(user_data["id"])
+
     except Exception as e:
         if logger:
             logger.error("verify failed: %s", e)

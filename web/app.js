@@ -1,7 +1,7 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// Берём initData строго из безопасного поля
+// Берём initData строго из Telegram
 const initData = tg.initData;
 
 if (!initData) {
@@ -9,14 +9,14 @@ if (!initData) {
     throw new Error("initData empty");
 }
 
-// URL-encode initData
-const encodedInitData = encodeURIComponent(initData);
-
-// API helper
+// API helper — ТОЛЬКО через Header
 async function api(path) {
-    const url = `${path}?init_data_query=${encodedInitData}`;
+    const res = await fetch(path, {
+        headers: {
+            "X-Telegram-Init-Data": initData
+        }
+    });
 
-    const res = await fetch(url);
     if (!res.ok) {
         throw new Error(await res.text());
     }
