@@ -2,22 +2,16 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 const initData = tg.initData;
-if (!initData) {
-    throw new Error("initData empty");
-}
-
-const HEADERS = {
-    "X-Telegram-Init-Data": initData
-};
+const HEADERS = { "X-Telegram-Init-Data": initData };
 
 let IS_ADMIN = false;
 let eventsCache = new Map();
-let timerInterval = null;
 
-async function api(path) {
+async function api(path, options = {}) {
     const res = await fetch(path, {
-        headers: HEADERS,
-        credentials: "same-origin"
+        credentials: "same-origin",
+        headers: { ...HEADERS, ...options.headers },
+        ...options
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -34,104 +28,88 @@ function renderAdminControls() {
     const c = document.getElementById("admin-controls");
     c.innerHTML = "";
     if (!IS_ADMIN) return;
+
     const b = document.createElement("button");
+    b.className = "admin";
     b.innerText = "➕ Создать событие";
-    b.onclick = openModal;
+    b.onclick = openCreateModal;
     c.appendChild(b);
 }
 
-function openModal() {
-    document.getElementById("modal").style.display = "block";
+function openCreateModal() {
+    showModal(`
+        <input id="title" placeholder="Название">
+        <input id="red" type="number" placeholder="Коэф 🔴">
+        <input id="black" type="number" placeholder="Коэф ⚫">
+        <button class="admin" onclick="submitCreate()">Создать</button>
+        <button onclick="closeModal()">Отмена</button>
+    `);
+}
+
+async function submitCreate() {
+    await api("/admin/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            title: title.value,
+            red_odds: red.value,
+            black_odds: black.value
+        })
+    });
+    closeModal();
+    alert("Событие успешно создано");
+    loadEvents();
+}
+
+function openFinishModal(id) {
+    showModal(`
+        <button class="red" onclick="finish(${id}, 'red')">🔴 Красные</button>
+        <button class="black" onclick="finish(${id}, 'black')">⚫ Чёрные</button>
+        <button onclick="closeModal()">Отмена</button>
+    `);
+}
+
+async function finish(id, winner) {
+    await api(`/admin/events/${id}/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner })
+    });
+    closeModal();
+    alert("Событие успешно завершено");
+    document.getElementById(`event-${id}`)?.remove();
+}
+
+function showModal(html) {
+    modal.style.display = "block";
+    modal-content.innerHTML = html;
 }
 
 function closeModal() {
-    document.getElementById("modal").style.display = "none";
-}
-
-async function submitCreateEvent() {
-    const title = document.getElementById("event-title").value.trim();
-    const red = Number(document.getElementById("red-odds").value);
-    const black = Number(document.getElementById("black-odds").value);
-
-    if (!title || red <= 0 || black <= 0) return;
-
-    await fetch("/admin/events", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            ...HEADERS
-        },
-        credentials: "same-origin",
-        body: JSON.stringify({
-            title: title,
-            red_odds: red,
-            black_odds: black
-        })
-    });
-
-    closeModal();
-    loadEvents();
+    modal.style.display = "none";
 }
 
 async function loadEvents() {
     const events = await api("/events");
+    const c = document.getElementById("events");
+    c.innerHTML = "";
 
     for (const e of events) {
-        if (!eventsCache.has(e.id)) {
-            createEventCard(e);
-            eventsCache.set(e.id, { ...e });
-        } else {
-            const c = eventsCache.get(e.id);
-            c.red_odds = e.red_odds;
-            c.black_odds = e.black_odds;
-            c.time_left = Math.min(c.time_left, e.time_left);
-            updateEventUI(e.id, c);
-        }
+        const card = document.createElement("div");
+        card.className = "card";
+        card.id = `event-${e.id}`;
+        card.innerHTML = `
+            <b>${e.title}</b>
+            <div>⏱ ${Math.floor(e.time_left/60)}:${String(e.time_left%60).padStart(2,"0")}</div>
+            <button class="red">🔴 x${e.red_odds}</button>
+            <button class="black">⚫ x${e.black_odds}</button>
+            ${IS_ADMIN ? `<button class="admin" onclick="openFinishModal(${e.id})">Завершить</button>` : ""}
+        `;
+        c.appendChild(card);
     }
 }
 
-function createEventCard(e) {
-    const c = document.getElementById("events");
-    const card = document.createElement("div");
-    card.className = "card";
-    card.id = `event-${e.id}`;
-    card.innerHTML = `
-        <div class="event-title">${e.title}</div>
-        <div id="time-${e.id}"></div>
-        <button class="red" id="red-${e.id}">🔴 ×${e.red_odds}</button>
-        <button class="black" id="black-${e.id}">⚫ ×${e.black_odds}</button>
-    `;
-    c.appendChild(card);
-}
-
-function updateEventUI(id, e) {
-    document.getElementById(`red-${id}`).innerText = `🔴 ×${e.red_odds}`;
-    document.getElementById(`black-${id}`).innerText = `⚫ ×${e.black_odds}`;
-}
-
-function startTimer() {
-    if (timerInterval) return;
-    timerInterval = setInterval(() => {
-        for (const [id, e] of eventsCache.entries()) {
-            if (e.time_left <= 0) {
-                document.getElementById(`event-${id}`)?.remove();
-                eventsCache.delete(id);
-                continue;
-            }
-            e.time_left -= 1;
-            const m = Math.floor(e.time_left / 60);
-            const s = String(e.time_left % 60).padStart(2, "0");
-            document.getElementById(`time-${id}`).innerText = `⏱ ${m}:${s}`;
-        }
-    }, 1000);
-}
-
-function start() {
-    loadMe();
-    loadEvents();
-    startTimer();
-    setInterval(loadMe, 2000);
-    setInterval(loadEvents, 2000);
-}
-
-start();
+loadMe();
+loadEvents();
+setInterval(loadMe, 2000);
+setInterval(loadEvents, 2000);
