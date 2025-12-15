@@ -17,8 +17,20 @@
         .admin { background:#2563eb; color:#fff }
         input { width:100%; padding:10px; border-radius:8px; border:none; margin-top:8px }
 
-        #modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6) }
-        #modal-content { background:#020617; padding:16px; border-radius:12px; max-width:400px; margin:20% auto }
+        #modal {
+            display:none;
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,.6);
+            z-index:1000;
+        }
+        #modal-content {
+            background:#020617;
+            padding:16px;
+            border-radius:12px;
+            max-width:400px;
+            margin:30% auto;
+        }
     </style>
 </head>
 
@@ -27,7 +39,11 @@
 
 <div class="container">
     <div id="admin-controls"></div>
-    <div class="card"><div id="balance">Баланс: …</div></div>
+
+    <div class="card">
+        <div id="balance">Баланс: …</div>
+    </div>
+
     <div id="events"></div>
 </div>
 
@@ -35,6 +51,6 @@
     <div id="modal-content"></div>
 </div>
 
-<script src="/static/app.js?v=20"></script>
+<script src="/static/app.js?v=30"></script>
 </body>
 </html>

@@ -2,10 +2,14 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 const initData = tg.initData;
+if (!initData) throw new Error("No initData");
+
 const HEADERS = { "X-Telegram-Init-Data": initData };
 
 let IS_ADMIN = false;
-let eventsCache = new Map();
+
+const modal = document.getElementById("modal");
+const modalContent = document.getElementById("modal-content");
 
 async function api(path, options = {}) {
     const res = await fetch(path, {
@@ -29,18 +33,28 @@ function renderAdminControls() {
     c.innerHTML = "";
     if (!IS_ADMIN) return;
 
-    const b = document.createElement("button");
-    b.className = "admin";
-    b.innerText = "➕ Создать событие";
-    b.onclick = openCreateModal;
-    c.appendChild(b);
+    const btn = document.createElement("button");
+    btn.className = "admin";
+    btn.innerText = "➕ Создать событие";
+    btn.onclick = openCreateModal;
+    c.appendChild(btn);
+}
+
+function showModal(html) {
+    modalContent.innerHTML = html;
+    modal.style.display = "block";
+}
+
+function closeModal() {
+    modal.style.display = "none";
+    modalContent.innerHTML = "";
 }
 
 function openCreateModal() {
     showModal(`
         <input id="title" placeholder="Название">
-        <input id="red" type="number" placeholder="Коэф 🔴">
-        <input id="black" type="number" placeholder="Коэф ⚫">
+        <input id="red" type="number" step="0.1" placeholder="Коэф 🔴">
+        <input id="black" type="number" step="0.1" placeholder="Коэф ⚫">
         <button class="admin" onclick="submitCreate()">Создать</button>
         <button onclick="closeModal()">Отмена</button>
     `);
@@ -51,9 +65,9 @@ async function submitCreate() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            title: title.value,
-            red_odds: red.value,
-            black_odds: black.value
+            title: document.getElementById("title").value,
+            red_odds: document.getElementById("red").value,
+            black_odds: document.getElementById("black").value
         })
     });
     closeModal();
@@ -63,13 +77,13 @@ async function submitCreate() {
 
 function openFinishModal(id) {
     showModal(`
-        <button class="red" onclick="finish(${id}, 'red')">🔴 Красные</button>
-        <button class="black" onclick="finish(${id}, 'black')">⚫ Чёрные</button>
+        <button class="red" onclick="finishEvent(${id}, 'red')">🔴 Красные</button>
+        <button class="black" onclick="finishEvent(${id}, 'black')">⚫ Чёрные</button>
         <button onclick="closeModal()">Отмена</button>
     `);
 }
 
-async function finish(id, winner) {
+async function finishEvent(id, winner) {
     await api(`/admin/events/${id}/finish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,32 +94,24 @@ async function finish(id, winner) {
     document.getElementById(`event-${id}`)?.remove();
 }
 
-function showModal(html) {
-    modal.style.display = "block";
-    modal-content.innerHTML = html;
-}
-
-function closeModal() {
-    modal.style.display = "none";
-}
-
 async function loadEvents() {
     const events = await api("/events");
-    const c = document.getElementById("events");
-    c.innerHTML = "";
+    const container = document.getElementById("events");
+    container.innerHTML = "";
 
     for (const e of events) {
         const card = document.createElement("div");
         card.className = "card";
         card.id = `event-${e.id}`;
+
         card.innerHTML = `
             <b>${e.title}</b>
-            <div>⏱ ${Math.floor(e.time_left/60)}:${String(e.time_left%60).padStart(2,"0")}</div>
+            <div>⏱ ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
             <button class="red">🔴 x${e.red_odds}</button>
             <button class="black">⚫ x${e.black_odds}</button>
             ${IS_ADMIN ? `<button class="admin" onclick="openFinishModal(${e.id})">Завершить</button>` : ""}
         `;
-        c.appendChild(card);
+        container.appendChild(card);
     }
 }
 
