@@ -28,14 +28,14 @@ def index():
 
 def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
     data = dict(parse_qsl(init_data))
-    hash_received = data.pop("hash", None)
 
+    hash_received = data.pop("hash", None)
     if not hash_received:
         raise HTTPException(status_code=403, detail="Missing hash")
 
-    data.pop("signature", None)
-
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+    data_check_string = "\n".join(
+        f"{k}={v}" for k, v in sorted(data.items())
+    )
 
     secret_key = hmac.new(
         b"WebAppData",
@@ -53,6 +53,7 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
         raise HTTPException(status_code=403, detail="Invalid Telegram hash")
 
     return data
+
 
 
 
