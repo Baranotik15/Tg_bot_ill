@@ -123,6 +123,7 @@ async def get_events(
 
 @app.post("/admin/events")
 async def create_event(
+    payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
     if not tg_init_data:
@@ -138,28 +139,28 @@ async def create_event(
     if tg_id not in get_admin_ids():
         raise HTTPException(status_code=403)
 
+    title = payload.get("title", "").strip()
+    red_odds = float(payload.get("red_odds", 0))
+    black_odds = float(payload.get("black_odds", 0))
+
+    if not title or red_odds <= 0 or black_odds <= 0:
+        raise HTTPException(status_code=400)
+
     now = datetime.utcnow()
     betting_ends_at = now + timedelta(minutes=10)
 
     async with get_session()() as session:
         event = Event(
-            event_title="Новое событие",
+            event_title=title,
             name=f"Event {now.strftime('%Y-%m-%d %H:%M:%S')}",
-            description="Создано из WebApp",
+            description=title,
             status=EventStatus.OPEN,
-            red_odds=2.0,
-            black_odds=2.0,
+            red_odds=red_odds,
+            black_odds=black_odds,
             betting_starts_at=now,
             betting_ends_at=betting_ends_at,
         )
         session.add(event)
         await session.commit()
-        await session.refresh(event)
 
-        return {
-            "id": event.id,
-            "title": event.event_title,
-            "red_odds": event.red_odds,
-            "black_odds": event.black_odds,
-            "time_left": int((betting_ends_at - now).total_seconds()),
-        }
+        return {"ok": True}
