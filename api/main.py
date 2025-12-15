@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from typing import Optional
@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl
 import os
 import json
 import time
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 
@@ -32,11 +33,11 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
 
     hash_received = data.pop("hash", None)
     if not hash_received:
-        raise HTTPException(status_code=403, detail="Missing hash")
+        raise HTTPException(status_code=403)
 
     auth_date = int(data.get("auth_date", 0))
     if time.time() - auth_date > 86400:
-        raise HTTPException(status_code=403, detail="Init data expired")
+        raise HTTPException(status_code=403)
 
     data_check_string = "\n".join(
         f"{k}={v}" for k, v in sorted(data.items())
@@ -55,7 +56,7 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
     ).hexdigest()
 
     if hash_calculated != hash_received:
-        raise HTTPException(status_code=403, detail="Invalid Telegram hash")
+        raise HTTPException(status_code=403)
 
     return data
 
@@ -65,7 +66,7 @@ async def get_me(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
     if not tg_init_data:
-        raise HTTPException(status_code=401, detail="Missing Telegram init data")
+        raise HTTPException(status_code=401)
 
     settings = context.settings
     assert settings is not None
@@ -77,12 +78,13 @@ async def get_me(
     async with get_session()() as session:
         user = await session.scalar(select(User).where(User.tg_id == tg_id))
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404)
 
         return {
             "tg_id": user.tg_id,
             "username": user.username,
             "balance": user.balance,
+            "is_admin": tg_id in settings.ADMIN_IDS,
         }
 
 
@@ -91,7 +93,7 @@ async def get_events(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
     if not tg_init_data:
-        raise HTTPException(status_code=401, detail="Missing Telegram init data")
+        raise HTTPException(status_code=401)
 
     settings = context.settings
     assert settings is not None
@@ -115,3 +117,48 @@ async def get_events(
             for e in events
             if e.is_betting_active()
         ]
+
+
+@app.post("/admin/events")
+async def create_event(
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
+):
+    if not tg_init_data:
+        raise HTTPException(status_code=401)
+
+    settings = context.settings
+    assert settings is not None
+
+    data = verify_telegram_webapp_init_data(tg_init_data, settings.bot_token)
+    user_data = json.loads(data["user"])
+    tg_id = int(user_data["id"])
+
+    if tg_id not in settings.ADMIN_IDS:
+        raise HTTPException(status_code=403)
+
+    now = datetime.utcnow()
+    betting_ends_at = now + timedelta(minutes=10)
+
+    async with get_session()() as session:
+        event = Event(
+            event_title="Новое событие",
+            name=f"Event {now.strftime('%Y-%m-%d %H:%M:%S')}",
+            description="Создано из WebApp",
+            status=EventStatus.OPEN,
+            red_odds=2.0,
+            black_odds=2.0,
+            betting_starts_at=now,
+            betting_ends_at=betting_ends_at,
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+        return {
+            "id": event.id,
+            "title": event.event_title,
+            "red_odds": event.red_odds,
+            "black_odds": event.black_odds,
+            "time_left": int((betting_ends_at - now).total_seconds()),
+        }
+

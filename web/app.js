@@ -10,6 +10,7 @@ const HEADERS = {
     "X-Telegram-Init-Data": initData
 };
 
+let IS_ADMIN = false;
 let eventsCache = new Map();
 let timerInterval = null;
 
@@ -27,7 +28,37 @@ async function api(path) {
 
 async function loadMe() {
     const me = await api("/me");
+    IS_ADMIN = me.is_admin;
     document.getElementById("balance").innerText = `💰 Баланс: ${me.balance}`;
+    renderAdminControls();
+}
+
+function renderAdminControls() {
+    const container = document.getElementById("admin-controls");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (!IS_ADMIN) return;
+
+    const btn = document.createElement("button");
+    btn.innerText = "➕ Создать событие";
+    btn.onclick = createEvent;
+    container.appendChild(btn);
+}
+
+async function createEvent() {
+    const res = await fetch("/admin/events", {
+        method: "POST",
+        headers: HEADERS,
+        credentials: "same-origin"
+    });
+
+    if (!res.ok) {
+        throw new Error(await res.text());
+    }
+
+    await loadEvents();
 }
 
 async function loadEvents() {
@@ -43,7 +74,6 @@ async function loadEvents() {
             cached.red_odds = e.red_odds;
             cached.black_odds = e.black_odds;
             cached.time_left = Math.min(cached.time_left, e.time_left);
-
             updateEventUI(e.id, cached);
         }
     }
@@ -67,8 +97,11 @@ function createEventCard(e) {
 }
 
 function updateEventUI(id, e) {
-    document.getElementById(`red-${id}`).innerText = `🔴 Красные ×${e.red_odds}`;
-    document.getElementById(`black-${id}`).innerText = `⚫ Черные ×${e.black_odds}`;
+    const red = document.getElementById(`red-${id}`);
+    const black = document.getElementById(`black-${id}`);
+
+    if (red) red.innerText = `🔴 Красные ×${e.red_odds}`;
+    if (black) black.innerText = `⚫ Черные ×${e.black_odds}`;
 }
 
 function startTimer() {
@@ -88,9 +121,7 @@ function startTimer() {
             const sec = String(e.time_left % 60).padStart(2, "0");
             const el = document.getElementById(`time-${id}`);
 
-            if (el) {
-                el.innerText = `⏱ ${min}:${sec}`;
-            }
+            if (el) el.innerText = `⏱ ${min}:${sec}`;
         }
     }, 1000);
 }
