@@ -1,19 +1,13 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-const initData = tg.initData || tg.initDataUnsafe?.query_id ? tg.initData : "";
+// Берём initData строго из безопасного поля
+const initData = tg.initData;
 
 if (!initData) {
     alert("❌ Открой WebApp только через кнопку в Telegram");
     throw new Error("initData empty");
 }
-
-// Отправляем initData на бэк для отладки
-fetch("/debug-init", {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: initData
-}).catch(console.error);
 
 // URL-encode initData
 const encodedInitData = encodeURIComponent(initData);

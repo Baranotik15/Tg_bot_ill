@@ -4,68 +4,52 @@ from fastapi.responses import FileResponse
 from typing import Optional
 import hmac
 import hashlib
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote_plus
 import os
 
 from sqlalchemy import select
 
-from bot.db import (
-    get_session,
-    User,
-    Event,
-    EventStatus,
-)
+from bot.db import get_session, User, Event, EventStatus
 from bot import context
 
 app = FastAPI(title="MafBot Web API")
 
-# -------------------------
-# Пути к web
-# -------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 WEB_DIR = os.path.join(BASE_DIR, "web")
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
-# -------------------------
-# Главная страница
-# -------------------------
 @app.get("/")
 def index():
     return FileResponse(os.path.join(WEB_DIR, "index.html"))
 
 
-# -------------------------
-# Проверка Telegram initData
-# -------------------------
 def verify_telegram_init_data(init_data: str, bot_token: str) -> dict:
+    init_data = unquote_plus(init_data)
     data = dict(parse_qsl(init_data, strict_parsing=True))
-    hash_received = data.pop("hash", None)
 
+    hash_received = data.pop("hash", None)
     if not hash_received:
         raise HTTPException(status_code=403, detail="Missing hash")
+
+    data.pop("signature", None)
 
     data_check_string = "\n".join(
         f"{k}={v}" for k, v in sorted(data.items())
     )
 
-    secret = hashlib.sha256(bot_token.encode()).digest()
-    hash_calculated = hmac.new(
-        secret,
+    calculated_hash = hmac.new(
+        bot_token.encode(),
         data_check_string.encode(),
         hashlib.sha256
     ).hexdigest()
 
-    if hash_calculated != hash_received:
+    if calculated_hash != hash_received:
         raise HTTPException(status_code=403, detail="Invalid Telegram signature")
 
     return data
 
-
-# -------------------------
-# /me — данные пользователя
-# -------------------------
 
 @app.get("/me")
 async def get_me(
@@ -74,18 +58,8 @@ async def get_me(
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
     init_data_query: Optional[str] = None,
 ):
-    settings = context.settings
     logger = context.logger
-
-    if logger:
-        logger.info(
-            "[/me] url=%s headers=%s auth=%s x_tg=%s query=%s",
-            str(request.url),
-            dict(request.headers),
-            authorization,
-            tg_init_data,
-            init_data_query,
-        )
+    settings = context.settings
 
     init_data = (tg_init_data or authorization or init_data_query or "").strip()
     if not init_data:
@@ -97,7 +71,7 @@ async def get_me(
         data = verify_telegram_init_data(init_data, settings.bot_token)
     except Exception as e:
         if logger:
-            logger.error("[/me] init_data verification failed: %s", e)
+            logger.error("verify failed: %s", e)
         raise
 
     tg_id = int(data["user[id]"])
@@ -107,12 +81,13 @@ async def get_me(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return {"tg_id": user.tg_id, "username": user.username, "balance": user.balance}
+        return {
+            "tg_id": user.tg_id,
+            "username": user.username,
+            "balance": user.balance,
+        }
 
 
-# -------------------------
-# /events — активные события
-# -------------------------
 @app.get("/events")
 async def get_events():
     async with get_session()() as session:
@@ -133,6 +108,7 @@ async def get_events():
             for e in events
             if e.is_betting_active()
         ]
+
 
 @app.post("/debug-init")
 async def debug_init(request: Request):
