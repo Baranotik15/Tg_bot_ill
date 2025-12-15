@@ -8,7 +8,6 @@ from urllib.parse import parse_qsl
 import os
 
 from sqlalchemy import select
-
 from bot.db import get_session, User, Event, EventStatus
 from bot import context
 
@@ -36,8 +35,14 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
         f"{k}={v}" for k, v in sorted(data.items())
     )
 
-    hash_calculated = hmac.new(
+    secret_key = hmac.new(
+        b"WebAppData",
         bot_token.encode(),
+        hashlib.sha256
+    ).digest()
+
+    hash_calculated = hmac.new(
+        secret_key,
         data_check_string.encode(),
         hashlib.sha256
     ).hexdigest()
@@ -60,15 +65,8 @@ async def get_me(
         raise HTTPException(status_code=401, detail="Missing auth")
 
     settings = context.settings
-    logger = context.logger
 
-    try:
-        data = verify_telegram_webapp_init_data(init_data, settings.bot_token)
-    except Exception as e:
-        if logger:
-            logger.error("verify failed: %s", e)
-        raise
-
+    data = verify_telegram_webapp_init_data(init_data, settings.bot_token)
     tg_id = int(data["user[id]"])
 
     async with get_session()() as session:
