@@ -7,6 +7,7 @@ import hashlib
 from urllib.parse import parse_qsl
 import os
 import json
+import time
 
 from sqlalchemy import select
 
@@ -33,6 +34,10 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
     if not hash_received:
         raise HTTPException(status_code=403, detail="Missing hash")
 
+    auth_date = int(data.get("auth_date", 0))
+    if time.time() - auth_date > 86400:
+        raise HTTPException(status_code=403, detail="Init data expired")
+
     data_check_string = "\n".join(
         f"{k}={v}" for k, v in sorted(data.items())
     )
@@ -55,33 +60,19 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> dict:
     return data
 
 
-
-
 @app.get("/me")
 async def get_me(
-    request: Request,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
     if not tg_init_data:
         raise HTTPException(status_code=401, detail="Missing Telegram init data")
 
     settings = context.settings
-    logger = context.logger
     assert settings is not None
 
-    try:
-        # 🔍 временно логируем сырой initData
-        if logger:
-            logger.info("TG INIT DATA RAW: %s", tg_init_data)
-
-        data = verify_telegram_webapp_init_data(tg_init_data, settings.bot_token)
-        user_data = json.loads(data["user"])
-        tg_id = int(user_data["id"])
-
-    except Exception as e:
-        if logger:
-            logger.error("verify failed: %s", e)
-        raise HTTPException(status_code=403, detail="Invalid init data")
+    data = verify_telegram_webapp_init_data(tg_init_data, settings.bot_token)
+    user_data = json.loads(data["user"])
+    tg_id = int(user_data["id"])
 
     async with get_session()() as session:
         user = await session.scalar(select(User).where(User.tg_id == tg_id))
@@ -96,7 +87,17 @@ async def get_me(
 
 
 @app.get("/events")
-async def get_events():
+async def get_events(
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
+):
+    if not tg_init_data:
+        raise HTTPException(status_code=401, detail="Missing Telegram init data")
+
+    settings = context.settings
+    assert settings is not None
+
+    verify_telegram_webapp_init_data(tg_init_data, settings.bot_token)
+
     async with get_session()() as session:
         result = await session.execute(
             select(Event).where(Event.status == EventStatus.OPEN)

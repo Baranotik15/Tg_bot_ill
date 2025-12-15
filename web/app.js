@@ -1,18 +1,14 @@
-alert("JS v999 LOADED");
-
 const tg = window.Telegram.WebApp;
 tg.expand();
 
 const initData = tg.initData;
 
 if (!initData) {
-    alert("Открой WebApp через кнопку в Telegram");
     throw new Error("initData empty");
 }
 
 async function api(path) {
     const res = await fetch(path, {
-        method: "GET",
         headers: {
             "X-Telegram-Init-Data": initData
         },
@@ -54,11 +50,6 @@ async function loadEvents() {
 }
 
 (async () => {
-    try {
-        await loadMe();
-        await loadEvents();
-    } catch (e) {
-        console.error(e);
-        alert("Ошибка загрузки данных");
-    }
+    await loadMe();
+    await loadEvents();
 })();
