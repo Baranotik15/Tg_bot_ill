@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot import context
 from bot.db import get_session, User, Event, EventStatus, Outcome
@@ -157,7 +158,44 @@ async def create_event(
         await session.commit()
         await session.refresh(event)
 
-        return {"ok": True, "event_id": event.id}
+        users = (await session.execute(select(User))).scalars().all()
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text=f"🔴 Красные x{event.red_odds}",
+                callback_data=f"bet_red:{event.id}"
+            ),
+            InlineKeyboardButton(
+                text=f"⚫ Черные x{event.black_odds}",
+                callback_data=f"bet_black:{event.id}"
+            )
+        ]]
+    )
+
+    for u in users:
+        try:
+            await context.bot.send_message(
+                u.tg_id,
+                f"🎲 <b>Начался матч!</b>\n\n"
+                f"📌 <b>{event.event_title}</b>\n\n"
+                f"⏱ Время на ставки: <b>10 минут</b>\n"
+                f"🎰 Выберите на что поставить:\n\n"
+                f"💳 Ваш баланс: <b>{u.balance}</b>",
+                reply_markup=keyboard
+            )
+        except Exception as e:
+            if hasattr(context, "logger"):
+                context.logger.warning(
+                    f"[WEB EVENT] Не удалось отправить пользователю {u.tg_id}: {e}"
+                )
+
+    if hasattr(context, "logger"):
+        context.logger.info(
+            f"[WEB EVENT] Создано событие {event.id}: {event.event_title}"
+        )
+
+    return {"ok": True, "event_id": event.id}
 
 
 @app.post("/admin/events/{event_id}/finish")
