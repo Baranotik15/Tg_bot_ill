@@ -19,18 +19,26 @@ from bot import context
 
 app = FastAPI(title="MafBot Web API")
 
-
+# -------------------------
+# Пути к web
+# -------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 WEB_DIR = os.path.join(BASE_DIR, "web")
 
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
+# -------------------------
+# Главная страница
+# -------------------------
 @app.get("/")
 def index():
     return FileResponse(os.path.join(WEB_DIR, "index.html"))
 
 
+# -------------------------
+# Проверка Telegram initData
+# -------------------------
 def verify_telegram_init_data(init_data: str, bot_token: str) -> dict:
     data = dict(parse_qsl(init_data, strict_parsing=True))
     hash_received = data.pop("hash", None)
@@ -38,7 +46,10 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> dict:
     if not hash_received:
         raise HTTPException(status_code=403, detail="Missing hash")
 
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+    data_check_string = "\n".join(
+        f"{k}={v}" for k, v in sorted(data.items())
+    )
+
     secret = hashlib.sha256(bot_token.encode()).digest()
     hash_calculated = hmac.new(
         secret,
@@ -52,15 +63,24 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> dict:
     return data
 
 
+# -------------------------
+# /me — данные пользователя
+# -------------------------
 @app.get("/me")
-async def get_me(authorization: Optional[str] = Header(None)):
-    if not authorization:
+async def get_me(
+    x_telegram_init_data: Optional[str] = Header(None)
+):
+    if not x_telegram_init_data:
         raise HTTPException(status_code=401, detail="Missing auth")
 
     settings = context.settings
     assert settings is not None
 
-    data = verify_telegram_init_data(authorization, settings.bot_token)
+    data = verify_telegram_init_data(
+        x_telegram_init_data,
+        settings.bot_token
+    )
+
     tg_id = int(data["user[id]"])
 
     async with get_session()() as session:
@@ -78,6 +98,9 @@ async def get_me(authorization: Optional[str] = Header(None)):
         }
 
 
+# -------------------------
+# /events — активные события
+# -------------------------
 @app.get("/events")
 async def get_events():
     async with get_session()() as session:

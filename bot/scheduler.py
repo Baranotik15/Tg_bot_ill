@@ -22,4 +22,4 @@ async def hourly_dump(settings: Settings) -> None:
 		except Exception:
 			pass
 		# Sleep 1 hour for make dump
-		await asyncio.sleep(3600)
+		await asyncio.sleep(3600 * 24)
