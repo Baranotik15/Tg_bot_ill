@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from typing import Optional
@@ -6,7 +6,6 @@ import hmac
 import hashlib
 from urllib.parse import parse_qsl
 import os
-from fastapi import Header
 
 from sqlalchemy import select
 
@@ -115,3 +114,9 @@ async def get_events():
             for e in events
             if e.is_betting_active()
         ]
+
+@app.post("/debug-init")
+async def debug_init(request: Request):
+    body = await request.body()
+    print("INIT_DATA FROM WEBAPP:", body.decode(errors="ignore"))
+    return {"ok": True}
