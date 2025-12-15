@@ -11,14 +11,16 @@ let IS_ADMIN = false;
 const modal = document.getElementById("modal");
 const modalContent = document.getElementById("modal-content");
 
+/* ================= API ================= */
+
 async function api(path, options = {}) {
     const res = await fetch(path, {
-        ...options,
         credentials: "same-origin",
         headers: {
             ...HEADERS,
             ...(options.headers || {})
-        }
+        },
+        ...options
     });
 
     if (!res.ok) {
@@ -27,12 +29,20 @@ async function api(path, options = {}) {
     return res.json();
 }
 
+/* ================= USER ================= */
+
 async function loadMe() {
-    const me = await api("/me");
-    IS_ADMIN = me.is_admin;
-    document.getElementById("balance").innerText = `💰 Баланс: ${me.balance}`;
-    renderAdminControls();
+    try {
+        const me = await api("/me");
+        IS_ADMIN = me.is_admin;
+        document.getElementById("balance").innerText = `💰 Баланс: ${me.balance}`;
+        renderAdminControls();
+    } catch (e) {
+        console.error(e);
+    }
 }
+
+/* ================= ADMIN UI ================= */
 
 function renderAdminControls() {
     const c = document.getElementById("admin-controls");
@@ -46,6 +56,8 @@ function renderAdminControls() {
     c.appendChild(btn);
 }
 
+/* ================= MODAL ================= */
+
 function showModal(html) {
     modalContent.innerHTML = html;
     modal.style.display = "block";
@@ -55,6 +67,8 @@ function closeModal() {
     modal.style.display = "none";
     modalContent.innerHTML = "";
 }
+
+/* ================= CREATE EVENT ================= */
 
 function openCreateModal() {
     showModal(`
@@ -76,20 +90,28 @@ async function submitCreate() {
         return;
     }
 
-    await api("/admin/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            title,
-            red_odds: red,
-            black_odds: black
-        })
-    });
+    try {
+        await api("/admin/events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                title,
+                red_odds: red,
+                black_odds: black
+            })
+        });
 
-    closeModal();
-    alert("Событие успешно создано");
-    loadEvents();
+        closeModal();
+        alert("✅ Событие успешно создано");
+        loadEvents();
+
+    } catch (e) {
+        alert("❌ Ошибка создания события");
+        console.error(e);
+    }
 }
+
+/* ================= FINISH EVENT ================= */
 
 function openFinishModal(id) {
     showModal(`
@@ -100,40 +122,55 @@ function openFinishModal(id) {
 }
 
 async function finishEvent(id, winner) {
-    await api(`/admin/events/${id}/finish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ winner })
-    });
+    try {
+        await api(`/admin/events/${id}/finish`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ winner })
+        });
 
-    closeModal();
-    alert("Событие успешно завершено");
-    document.getElementById(`event-${id}`)?.remove();
-}
+        closeModal();
+        alert("✅ Событие успешно завершено");
+        document.getElementById(`event-${id}`)?.remove();
 
-async function loadEvents() {
-    const events = await api("/events");
-    const container = document.getElementById("events");
-    container.innerHTML = "";
-
-    for (const e of events) {
-        const card = document.createElement("div");
-        card.className = "card";
-        card.id = `event-${e.id}`;
-
-        card.innerHTML = `
-            <b>${e.title}</b>
-            <div>⏱ ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
-            <button class="red">🔴 x${e.red_odds}</button>
-            <button class="black">⚫ x${e.black_odds}</button>
-            ${IS_ADMIN ? `<button class="admin" onclick="openFinishModal(${e.id})">Завершить</button>` : ""}
-        `;
-
-        container.appendChild(card);
+    } catch (e) {
+        alert("❌ Ошибка завершения события");
+        console.error(e);
     }
 }
 
+/* ================= EVENTS LIST ================= */
+
+async function loadEvents() {
+    try {
+        const events = await api("/events");
+        const container = document.getElementById("events");
+        container.innerHTML = "";
+
+        for (const e of events) {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.id = `event-${e.id}`;
+
+            card.innerHTML = `
+                <b>${e.title}</b>
+                <div>⏱ ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
+                <button class="red" disabled>🔴 x${e.red_odds}</button>
+                <button class="black" disabled>⚫ x${e.black_odds}</button>
+                ${IS_ADMIN ? `<button class="admin" onclick="openFinishModal(${e.id})">Завершить</button>` : ""}
+            `;
+
+            container.appendChild(card);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+/* ================= INIT ================= */
+
 loadMe();
 loadEvents();
+
 setInterval(loadMe, 2000);
 setInterval(loadEvents, 2000);

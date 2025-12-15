@@ -11,11 +11,12 @@ import time
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot import context
 from bot.db import get_session, User, Event, EventStatus, Outcome
 from bot.handlers.betting import settle_event
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 
 app = FastAPI(title="MafBot Web API")
 
@@ -106,6 +107,7 @@ async def get_events(
 ):
     settings = context.settings
     assert settings is not None
+
     verify_init_data(tg_init_data, settings.bot_token)
 
     async with get_session()() as session:
@@ -134,10 +136,10 @@ async def create_event(
     get_admin_id(tg_init_data)
 
     title = payload.get("title")
-    red_odds = payload.get("red_odds")
-    black_odds = payload.get("black_odds")
+    red_odds = float(payload.get("red_odds", 0))
+    black_odds = float(payload.get("black_odds", 0))
 
-    if not title or float(red_odds) <= 0 or float(black_odds) <= 0:
+    if not title or red_odds <= 0 or black_odds <= 0:
         raise HTTPException(status_code=400)
 
     now = datetime.utcnow()
@@ -146,11 +148,11 @@ async def create_event(
     async with get_session()() as session:
         event = Event(
             event_title=title,
-            name=f"Event {now.strftime('%Y-%m-%d %H:%M:%S')}",
-            description=title,
+            name=f"Ставка {now.strftime('%Y-%m-%d %H:%M:%S')}",
+            description=f"{title} - Красные: {red_odds} / Черные: {black_odds}",
             status=EventStatus.OPEN,
-            red_odds=float(red_odds),
-            black_odds=float(black_odds),
+            red_odds=red_odds,
+            black_odds=black_odds,
             betting_starts_at=now,
             betting_ends_at=betting_ends_at
         )
@@ -163,11 +165,11 @@ async def create_event(
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[
             InlineKeyboardButton(
-                text=f"🔴 Красные x{event.red_odds}",
+                text=f"🔴 Красные x{red_odds}",
                 callback_data=f"bet_red:{event.id}"
             ),
             InlineKeyboardButton(
-                text=f"⚫ Черные x{event.black_odds}",
+                text=f"⚫ Черные x{black_odds}",
                 callback_data=f"bet_black:{event.id}"
             )
         ]]
@@ -178,22 +180,13 @@ async def create_event(
             await context.bot.send_message(
                 u.tg_id,
                 f"🎲 <b>Начался матч!</b>\n\n"
-                f"📌 <b>{event.event_title}</b>\n\n"
+                f"📌 <b>{title}</b>\n\n"
                 f"⏱ Время на ставки: <b>10 минут</b>\n"
-                f"🎰 Выберите на что поставить:\n\n"
                 f"💳 Ваш баланс: <b>{u.balance}</b>",
                 reply_markup=keyboard
             )
-        except Exception as e:
-            if hasattr(context, "logger"):
-                context.logger.warning(
-                    f"[WEB EVENT] Не удалось отправить пользователю {u.tg_id}: {e}"
-                )
-
-    if hasattr(context, "logger"):
-        context.logger.info(
-            f"[WEB EVENT] Создано событие {event.id}: {event.event_title}"
-        )
+        except Exception:
+            pass
 
     return {"ok": True, "event_id": event.id}
 
