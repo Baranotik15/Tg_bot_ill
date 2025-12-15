@@ -6,6 +6,7 @@ import hmac
 import hashlib
 from urllib.parse import parse_qsl
 import os
+from fastapi import Header
 
 from sqlalchemy import select
 
@@ -66,36 +67,28 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> dict:
 # -------------------------
 # /me — данные пользователя
 # -------------------------
+
 @app.get("/me")
 async def get_me(
-    x_telegram_init_data: Optional[str] = Header(None)
+    authorization: Optional[str] = Header(None),
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data"),
 ):
-    if not x_telegram_init_data:
+    init_data = (tg_init_data or authorization or "").strip()
+    if not init_data:
         raise HTTPException(status_code=401, detail="Missing auth")
 
     settings = context.settings
     assert settings is not None
 
-    data = verify_telegram_init_data(
-        x_telegram_init_data,
-        settings.bot_token
-    )
-
+    data = verify_telegram_init_data(init_data, settings.bot_token)
     tg_id = int(data["user[id]"])
 
     async with get_session()() as session:
-        user = await session.scalar(
-            select(User).where(User.tg_id == tg_id)
-        )
-
+        user = await session.scalar(select(User).where(User.tg_id == tg_id))
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return {
-            "tg_id": user.tg_id,
-            "username": user.username,
-            "balance": user.balance,
-        }
+        return {"tg_id": user.tg_id, "username": user.username, "balance": user.balance}
 
 
 # -------------------------
