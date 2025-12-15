@@ -1,97 +1,93 @@
-// Инициализация Telegram WebApp
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// если API и сайт на одном домене — оставляем пустым
 const API_BASE = "";
 
-// Telegram initData (то, что проверяется на бэке)
-const initData = tg.initData;
+const authHeader = tg.initData; // получаем initData
 
-// Универсальная функция API
-async function api(path, options = {}) {
+console.log(authHeader);  // Логируем для проверки, что передается в запросе
+
+async function api(path) {
     const res = await fetch(`${API_BASE}${path}`, {
-        method: options.method || "GET",
         headers: {
-            "Content-Type": "application/json",
-            "X-Telegram-Init-Data": initData,
-        },
-        body: options.body ? JSON.stringify(options.body) : undefined,
+            "Authorization": authHeader
+        }
     });
 
     if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text);
+        throw new Error(await res.text());
     }
 
     return res.json();
 }
 
-// Загрузка данных пользователя
 async function loadMe() {
-    const me = await api("/me");
-    document.getElementById("balance").innerText =
-        `💰 Баланс: ${me.balance} баллов`;
+    try {
+        const me = await api("/me");
+        console.log(me);  // Логируем, что пришло с сервера
+        document.getElementById("balance").innerText = `💰 Баланс: ${me.balance} баллов`;
+    } catch (e) {
+        console.error('Ошибка при загрузке данных', e);
+        alert("Ошибка загрузки данных");
+    }
 }
 
-// Загрузка активных событий
 async function loadEvents() {
-    const events = await api("/events");
-    const container = document.getElementById("events");
-    container.innerHTML = "";
+    try {
+        const events = await api("/events");
+        const container = document.getElementById("events");
+        container.innerHTML = "";
 
-    if (!events || events.length === 0) {
-        container.innerHTML =
-            `<div class="card">❌ Нет активных событий</div>`;
-        return;
-    }
+        if (events.length === 0) {
+            container.innerHTML = `<div class="card">❌ Нет активных событий</div>`;
+            return;
+        }
 
-    for (const e of events) {
-        const card = document.createElement("div");
-        card.className = "card";
+        for (const e of events) {
+            const card = document.createElement("div");
+            card.className = "card";
 
-        card.innerHTML = `
-            <div class="event-title">${e.title}</div>
-            <div>
-                ⏱ Осталось: ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}
-            </div>
+            card.innerHTML = `
+                <div class="event-title">${e.title}</div>
+                <div>⏱ Осталось: ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
 
-            <button class="red"
-                onclick="placeBet(${e.id}, 'red', ${e.red_odds})">
-                🔴 Красные ×${e.red_odds}
-            </button>
+                <button class="red" onclick="placeBet(${e.id}, 'red', ${e.red_odds})">
+                    🔴 Красные ×${e.red_odds}
+                </button>
 
-            <button class="black"
-                onclick="placeBet(${e.id}, 'black', ${e.black_odds})">
-                ⚫ Черные ×${e.black_odds}
-            </button>
-        `;
+                <button class="black" onclick="placeBet(${e.id}, 'black', ${e.black_odds})">
+                    ⚫ Черные ×${e.black_odds}
+                </button>
+            `;
 
-        container.appendChild(card);
+            container.appendChild(card);
+        }
+    } catch (e) {
+        console.error('Ошибка при загрузке событий', e);
+        alert("Ошибка загрузки данных");
     }
 }
 
-// Отправка ставки в бота
 function placeBet(eventId, team, odds) {
     const amount = prompt(`Введите сумму ставки (коэф ×${odds})`);
-    if (!amount || isNaN(amount) || Number(amount) <= 0) return;
+    if (!amount) return;
 
     tg.sendData(JSON.stringify({
         action: "bet",
         event_id: eventId,
         team: team,
-        amount: Number(amount),
+        amount: Number(amount)
     }));
 
-    tg.showAlert("Ставка отправлена в бот");
+    alert("Ставка отправлена в бот");
 }
 
 (async () => {
     try {
         await loadMe();
         await loadEvents();
-    } catch (err) {
-        console.error("WebApp error:", err);
-        tg.showAlert("Ошибка загрузки данных");
+    } catch (e) {
+        alert("Ошибка загрузки данных");
+        console.error(e);
     }
 })();
