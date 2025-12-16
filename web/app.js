@@ -240,10 +240,12 @@ async function loadEvents() {
 
     if (events.length === 0) {
         emptyState.style.display = "block";
+        container.style.display = "none";
         return;
-    } else {
-        emptyState.style.display = "none";
     }
+
+    emptyState.style.display = "none";
+    container.style.display = "block";
 
     for (const e of events) {
         const safeTitle = e.title.replace(/'/g, "&#39;");
