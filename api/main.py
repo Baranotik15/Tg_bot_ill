@@ -243,7 +243,7 @@ async def change_odds(
     return {"ok": True}
 
 
-# ---------------- BET (FIXED) ----------------
+# ---------------- BET ----------------
 
 @app.post("/bet")
 async def place_bet(
@@ -291,11 +291,13 @@ async def place_bet(
 
     await context.bot.send_message(
         tg_id,
-        f"✅ <b>Ставка принята!</b>\n\n"
-        f"📌 {event.event_title}\n"
-        f"🎯 Выбор: {'Красные 🔴' if side == 'red' else 'Черные ⚫'}\n"
-        f"💰 Сумма: {amount}\n"
-        f"📈 Коэф: x{odds}"
+        f"✅ <b>Ваша ставка принята!</b>\n\n"
+        f"🎲 <b>Событие:</b> {event.event_title}\n"
+        f"🎯 <b>Команда:</b> {'Красных 🔴' if side == 'red' else 'Черных ⚫'}\n"
+        f"💰 <b>Сумма ставки:</b> {amount} баллов\n"
+        f"📊 <b>Коэффициент:</b> x{odds}\n"
+        f"🏆 <b>Ожидаемый выигрыш:</b> {expected_win} баллов 💰\n"
+        f"💳 <b>Ваш текущий баланс:</b> {new_balance} баллов"
     )
 
     return {"ok": True}
