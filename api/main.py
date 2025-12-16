@@ -62,9 +62,6 @@ def verify_init_data(init_data: str, bot_token: str) -> dict:
 
 
 def get_admin_id(tg_init_data: Optional[str]) -> int:
-    if not tg_init_data:
-        raise HTTPException(status_code=401)
-
     settings = context.settings
     data = verify_init_data(tg_init_data, settings.bot_token)
     user = json.loads(data["user"])
@@ -157,21 +154,18 @@ async def create_event(
         users = (await session.execute(select(User))).scalars().all()
 
         keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text=f"🔴 Красные x{red_odds}",
-                        callback_data=f"bet_red:{event.id}"
-                    ),
-                    InlineKeyboardButton(
-                        text=f"⚫ Черные x{black_odds}",
-                        callback_data=f"bet_black:{event.id}"
-                    )
-                ]
-            ]
+            inline_keyboard=[[
+                InlineKeyboardButton(
+                    text=f"🔴 Красные x{red_odds}",
+                    callback_data=f"bet_red:{event.id}"
+                ),
+                InlineKeyboardButton(
+                    text=f"⚫ Черные x{black_odds}",
+                    callback_data=f"bet_black:{event.id}"
+                )
+            ]]
         )
 
-        sent = 0
         for u in users:
             try:
                 await context.bot.send_message(
@@ -179,18 +173,12 @@ async def create_event(
                     f"🎲 <b>Начался матч!</b>\n\n"
                     f"📌 <b>{event.event_title}</b>\n\n"
                     f"⏱ Время на ставки: <b>10 минут</b>\n"
-                    f"💳 Ваш баланс: <b>{u.balance}</b>",
+                    f"🎰 Выберите на что поставить:\n\n"
+                    f"💳 Ваш баланс: <b>{u.balance}</b> баллов",
                     reply_markup=keyboard
                 )
-                sent += 1
             except Exception:
                 pass
-
-    if hasattr(context, "logger"):
-        context.logger.info(
-            f"[WEB][EVENT] Created event {event.id} title='{title}' "
-            f"red={red_odds} black={black_odds} notified={sent}"
-        )
 
     return {"ok": True, "event_id": event.id}
 
