@@ -20,7 +20,7 @@ from bot.db import (
     Event,
     EventStatus,
     Outcome,
-    Bet, PromoCode,
+    Bet, PromoCode, redeem_promo,
 )
 from bot.handlers.betting import settle_event
 
@@ -392,7 +392,6 @@ async def redeem_promocode(
     payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
-
     settings = context.settings
     data = verify_init_data(tg_init_data, settings.bot_token)
     user_data = json.loads(data["user"])
@@ -410,20 +409,17 @@ async def redeem_promocode(
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-        try:
-            added = await context.db.redeem_promo(user.id, code.upper())
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except Exception:
-            raise HTTPException(
-                status_code=500,
-                detail="Не удалось применить промокод"
-            )
+    try:
+        added = await redeem_promo(user.id, code.upper())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Не удалось применить промокод"
+        )
 
-        await session.refresh(user)
-
-        return {
-            "ok": True,
-            "added": added,
-            "balance": user.balance
-        }
+    return {
+        "ok": True,
+        "added": added
+    }

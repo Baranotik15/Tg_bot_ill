@@ -333,6 +333,43 @@ async function loadEvents() {
     }
 }
 
+function openRedeemPromoModal() {
+    showModal(`
+        <b>🎁 Ввести промокод</b>
+
+        <input id="redeem-promo-code" type="text" placeholder="Введите промокод">
+
+        <button class="promo" onclick="submitRedeemPromo()">Применить</button>
+        <button onclick="closeModal()">Отмена</button>
+    `);
+}
+
+
+async function submitRedeemPromo() {
+    const input = document.getElementById("redeem-promo-code");
+    const code = input.value.trim();
+
+    if (!code) {
+        alert("Введите промокод");
+        return;
+    }
+
+    try {
+        const res = await api("/promocode/redeem", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code })
+        });
+
+        closeModal();
+        alert(`🎉 Промокод применён! +${res.added} баллов`);
+        await loadMe();
+
+    } catch (e) {
+        alert(e.message || "Не удалось применить промокод");
+    }
+}
+
 /* ---------------- INIT ---------------- */
 
 loadTop();
