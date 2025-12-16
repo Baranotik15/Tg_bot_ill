@@ -14,7 +14,7 @@ from sqlalchemy import select
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot import context
-from bot.db import get_session, User, Event, EventStatus, Outcome
+from bot.db import get_session, User, Event, EventStatus, Outcome, Bet
 from bot.handlers.betting import settle_event
 
 
