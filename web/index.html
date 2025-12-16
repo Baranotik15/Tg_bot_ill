@@ -80,6 +80,12 @@
             background: #2563eb;
             color: #fff;
         }
+
+        .promo {
+            background: #16a34a;
+            color: #fff;
+        }
+
         .admin-row {
             display: flex;
             gap: 10px;
@@ -119,7 +125,6 @@
             overflow-y: auto;
         }
 
-        /* ---- TOP ---- */
         #top-list {
             display: flex;
             flex-direction: column;
@@ -144,7 +149,6 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* ---- EMPTY STATE ---- */
         #empty-state {
             display: none;
             text-align: center;
@@ -152,7 +156,7 @@
         }
 
         #empty-state img {
-            width: 340px;
+            width: 300px;
             max-width: 95%;
             margin: 10px auto 14px;
             display: block;
@@ -178,11 +182,14 @@
         <div id="top-list">Загрузка…</div>
     </div>
 
+    <button class="promo" onclick="openPromoModal()">
+        🎁 Ввести промокод
+    </button>
+
     <div class="card">
         <div id="balance">Баланс: …</div>
     </div>
 
-    <!-- EMPTY STATE -->
     <div id="empty-state">
         <img src="/static/1.png?v=5" alt="Нет событий">
         <div class="empty-text">
@@ -197,6 +204,6 @@
     <div id="modal-content"></div>
 </div>
 
-<script src="/static/app.js?v=56"></script>
+<script src="/static/app.js?v=57"></script>
 </body>
 </html>

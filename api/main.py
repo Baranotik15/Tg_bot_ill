@@ -385,4 +385,45 @@ async def create_promocode(
         }
     }
 
+# ---------------- PROMO REDEEM  ----------------
 
+@app.post("/promocode/redeem")
+async def redeem_promocode(
+    payload: dict,
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
+):
+
+    settings = context.settings
+    data = verify_init_data(tg_init_data, settings.bot_token)
+    user_data = json.loads(data["user"])
+    tg_id = int(user_data["id"])
+
+    code = payload.get("code")
+
+    if not code or not isinstance(code, str):
+        raise HTTPException(status_code=400, detail="Неверный промокод")
+
+    async with get_session()() as session:
+        user = await session.scalar(
+            select(User).where(User.tg_id == tg_id)
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+        try:
+            added = await context.db.redeem_promo(user.id, code.upper())
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception:
+            raise HTTPException(
+                status_code=500,
+                detail="Не удалось применить промокод"
+            )
+
+        await session.refresh(user)
+
+        return {
+            "ok": True,
+            "added": added,
+            "balance": user.balance
+        }
