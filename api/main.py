@@ -126,6 +126,95 @@ async def get_events(
         ]
 
 
+# ---------------- ADMIN ----------------
+
+@app.post("/admin/events")
+async def create_event(
+    payload: dict,
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
+):
+    get_admin_id(tg_init_data)
+
+    title = payload.get("title")
+    red_odds = float(payload.get("red_odds", 0))
+    black_odds = float(payload.get("black_odds", 0))
+
+    if not title or red_odds <= 0 or black_odds <= 0:
+        raise HTTPException(status_code=400)
+
+    now = datetime.utcnow()
+    betting_ends_at = now + timedelta(minutes=10)
+
+    async with get_session()() as session:
+        event = Event(
+            event_title=title,
+            name=f"Event {now.isoformat()}",
+            description=title,
+            status=EventStatus.OPEN,
+            red_odds=red_odds,
+            black_odds=black_odds,
+            betting_starts_at=now,
+            betting_ends_at=betting_ends_at
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+
+    return {"ok": True, "event_id": event.id}
+
+
+@app.post("/admin/events/{event_id}/finish")
+async def finish_event(
+    event_id: int,
+    payload: dict,
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
+):
+    get_admin_id(tg_init_data)
+
+    winner = payload.get("winner")
+    if winner not in ("red", "black"):
+        raise HTTPException(status_code=400)
+
+    async with get_session()() as session:
+        event = await session.get(Event, event_id)
+        if not event or event.status != EventStatus.OPEN:
+            raise HTTPException(status_code=400)
+
+        event.outcome = Outcome.RED if winner == "red" else Outcome.BLACK
+        await session.commit()
+
+    await settle_event(event_id, context.bot)
+    return {"ok": True}
+
+
+@app.post("/admin/events/{event_id}/odds")
+async def change_odds(
+    event_id: int,
+    payload: dict,
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
+):
+    get_admin_id(tg_init_data)
+
+    red = float(payload.get("red_odds", 0))
+    black = float(payload.get("black_odds", 0))
+
+    if red <= 0 or black <= 0:
+        raise HTTPException(status_code=400)
+
+    async with get_session()() as session:
+        event = await session.get(Event, event_id)
+        if not event or event.status != EventStatus.OPEN:
+            raise HTTPException(status_code=400)
+
+        event.red_odds = red
+        event.black_odds = black
+        await session.commit()
+
+    return {"ok": True}
+
+
+# ---------------- BET (FIXED) ----------------
+
 @app.post("/bet")
 async def place_bet(
     payload: dict,
