@@ -337,7 +337,7 @@ async function submitRedeemPromo() {
         await loadMe();
 
     } catch (e) {
-        alert(e.message || "Не удалось применить промокод");
+        alert(e.message.replace(/^Error:\s*/, "") || "Не удалось применить промокод");
     }
 }
 

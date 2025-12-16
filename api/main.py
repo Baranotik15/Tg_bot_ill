@@ -411,6 +411,12 @@ async def redeem_promocode(
 
     try:
         added = await redeem_promo(user.id, code.upper())
+        await context.bot.send_message(
+            tg_id,
+            f"🎉 <b>Промокод применён!</b>\n"
+            f"➕ Начислено {added} баллов 💵"
+        )
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception:
