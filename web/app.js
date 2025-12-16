@@ -234,7 +234,16 @@ async function finishEvent(id, winner) {
 async function loadEvents() {
     const events = await api("/events");
     const container = document.getElementById("events");
+    const emptyState = document.getElementById("empty-state");
+
     container.innerHTML = "";
+
+    if (events.length === 0) {
+        emptyState.style.display = "block";
+        return;
+    } else {
+        emptyState.style.display = "none";
+    }
 
     for (const e of events) {
         const safeTitle = e.title.replace(/'/g, "&#39;");
