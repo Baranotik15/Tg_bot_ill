@@ -276,6 +276,7 @@ async def place_bet(
             raise HTTPException(status_code=400, detail="Недостаточно средств")
 
         odds = event.red_odds if side == "red" else event.black_odds
+        expected_win = int(amount * odds)
 
         bet = Bet(
             user_id=user.id,
@@ -288,6 +289,8 @@ async def place_bet(
         user.balance -= amount
         session.add(bet)
         await session.commit()
+
+        new_balance = user.balance
 
     await context.bot.send_message(
         tg_id,
