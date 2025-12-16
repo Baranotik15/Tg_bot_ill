@@ -23,7 +23,15 @@ async function api(path, options = {}) {
             ...(options.headers || {})
         }
     });
-    if (!res.ok) throw new Error(await res.text());
+
+    if (!res.ok) {
+        let msg = "Ошибка";
+        try {
+            const data = await res.json();
+            msg = data.detail || msg;
+        } catch (_) {}
+        throw new Error(msg);
+    }
     return res.json();
 }
 
@@ -311,19 +319,23 @@ function openRedeemPromoModal() {
 
         <input id="redeem-promo-code" type="text" placeholder="Введите промокод">
 
-        <button class="promo" onclick="submitRedeemPromo()">Применить</button>
+        <button id="redeem-btn" class="promo" onclick="submitRedeemPromo()">Применить</button>
         <button onclick="closeModal()">Отмена</button>
     `);
 }
 
+
 async function submitRedeemPromo() {
     const input = document.getElementById("redeem-promo-code");
+    const btn = document.getElementById("redeem-btn");
     const code = input.value.trim();
 
     if (!code) {
         alert("Введите промокод");
         return;
     }
+
+    if (btn) btn.disabled = true;
 
     try {
         const res = await api("/promocode/redeem", {
@@ -337,7 +349,9 @@ async function submitRedeemPromo() {
         await loadMe();
 
     } catch (e) {
-        alert(e.message.replace(/^Error:\s*/, "") || "Не удалось применить промокод");
+        alert(e.message || "Не удалось применить промокод");
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
