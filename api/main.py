@@ -218,3 +218,29 @@ async def finish_event(
     await settle_event(event_id, context.bot)
 
     return {"ok": True}
+
+
+@app.post("/admin/events/{event_id}/odds")
+async def change_odds(
+    event_id: int,
+    payload: dict,
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
+):
+    get_admin_id(tg_init_data)
+
+    red = float(payload.get("red_odds", 0))
+    black = float(payload.get("black_odds", 0))
+
+    if red <= 0 or black <= 0:
+        raise HTTPException(status_code=400)
+
+    async with get_session()() as session:
+        event = await session.get(Event, event_id)
+        if not event or event.status != EventStatus.OPEN:
+            raise HTTPException(status_code=400)
+
+        event.red_odds = red
+        event.black_odds = black
+        await session.commit()
+
+    return {"ok": True}
