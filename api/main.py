@@ -234,7 +234,7 @@ async def change_odds(
     return {"ok": True}
 
 @app.post("/bet")
-async def web_bet(
+async def place_bet(
     payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
@@ -243,40 +243,44 @@ async def web_bet(
     user_data = json.loads(data["user"])
     tg_id = int(user_data["id"])
 
-    event_id = int(payload.get("event_id"))
+    event_id = int(payload.get("event_id", 0))
     side = payload.get("side")
+    amount = int(payload.get("amount", 0))
 
-    if side not in ("red", "black"):
+    if side not in ("red", "black") or amount <= 0:
         raise HTTPException(status_code=400)
 
     async with get_session()() as session:
         user = await session.scalar(select(User).where(User.tg_id == tg_id))
         event = await session.get(Event, event_id)
 
-        if not user or not event or not event.is_betting_active():
+        if not user or not event:
+            raise HTTPException(status_code=404)
+
+        if event.status != EventStatus.OPEN or not event.is_betting_active():
             raise HTTPException(status_code=400)
 
-        odds = event.red_odds if side == "red" else event.black_odds
-        side_name = "Красных 🔴" if side == "red" else "Черных ⚫"
+        if user.balance < amount:
+            raise HTTPException(status_code=400, detail="Недостаточно средств")
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[[
-            InlineKeyboardButton(
-                text=f"Подтвердить ставку",
-                callback_data=f"bet_{side}:{event_id}"
-            )
-        ]]
-    )
+        bet = Bet(
+            user_id=user.id,
+            event_id=event.id,
+            amount=amount,
+            outcome=Outcome.RED if side == "red" else Outcome.BLACK
+        )
+
+        user.balance -= amount
+        session.add(bet)
+        await session.commit()
 
     await context.bot.send_message(
         tg_id,
-        f"💣 <b>Значит ты за Мафию?</b> 💣\n\n"
+        f"✅ <b>Ставка принята!</b>\n\n"
         f"📌 Событие: <b>{event.event_title}</b>\n"
-        f"🎯 Ставка на: <b>{side_name}</b>\n"
-        f"📈 Коэффициент: <b>{odds}x</b>\n\n"
-        f"💳 Ваш баланс: <b>{user.balance}</b>\n\n"
-        f"💰 <b>Введите сумму ставки:</b>",
-        reply_markup=keyboard
+        f"🎯 Вы выбрали: <b>{'Красные 🔴' if side == 'red' else 'Черные ⚫'}</b>\n"
+        f"💰 Сумма: <b>{amount}</b> баллов"
     )
 
     return {"ok": True}
+
