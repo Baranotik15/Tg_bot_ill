@@ -1,5 +1,6 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
+if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
 
 const initData = tg.initData;
 if (!initData) throw new Error("No initData");
@@ -24,6 +25,28 @@ async function api(path, options = {}) {
     return res.json();
 }
 
+function showModal(html, focusId = null) {
+    modalContent.innerHTML = html;
+    modal.style.display = "block";
+
+    setTimeout(() => {
+        const el = focusId ? document.getElementById(focusId) : modalContent.querySelector("input,textarea");
+        if (el) {
+            el.focus();
+            el.click();
+        }
+    }, 80);
+}
+
+function closeModal() {
+    modal.style.display = "none";
+    modalContent.innerHTML = "";
+}
+
+modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+});
+
 async function loadMe() {
     const me = await api("/me");
     IS_ADMIN = me.is_admin;
@@ -43,24 +66,14 @@ function renderAdminControls() {
     c.appendChild(btn);
 }
 
-function showModal(html) {
-    modalContent.innerHTML = html;
-    modal.style.display = "block";
-}
-
-function closeModal() {
-    modal.style.display = "none";
-    modalContent.innerHTML = "";
-}
-
 function openCreateModal() {
     showModal(`
-        <input id="title" type="text" placeholder="Название">
-        <input id="red" type="text" inputmode="decimal" placeholder="Коэф 🔴">
-        <input id="black" type="text" inputmode="decimal" placeholder="Коэф ⚫">
+        <input id="title" type="text" placeholder="Название" autocomplete="off">
+        <input id="red" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="Коэф 🔴" autocomplete="off" enterkeyhint="next">
+        <input id="black" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="Коэф ⚫" autocomplete="off" enterkeyhint="done">
         <button class="admin" onclick="submitCreate()">Создать</button>
         <button onclick="closeModal()">Отмена</button>
-    `);
+    `, "title");
 }
 
 async function submitCreate() {
@@ -85,11 +98,11 @@ async function submitCreate() {
 
 function openOddsModal(id, red, black) {
     showModal(`
-        <input id="red-odds" type="text" inputmode="decimal" value="${red}">
-        <input id="black-odds" type="text" inputmode="decimal" value="${black}">
+        <input id="red-odds" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${red}" autocomplete="off" enterkeyhint="next">
+        <input id="black-odds" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${black}" autocomplete="off" enterkeyhint="done">
         <button class="admin" onclick="submitOdds(${id})">Сохранить</button>
         <button onclick="closeModal()">Отмена</button>
-    `);
+    `, "red-odds");
 }
 
 async function submitOdds(id) {
@@ -141,9 +154,9 @@ async function loadEvents() {
         card.id = `event-${e.id}`;
 
         card.innerHTML = `
-            <div class="event-head">
+            <div class="event-head" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
                 <b>${e.title}</b>
-                ${IS_ADMIN ? `<button class="gear" onclick="openOddsModal(${e.id}, ${e.red_odds}, ${e.black_odds})">⚙️</button>` : ""}
+                ${IS_ADMIN ? `<button class="gear" style="width:auto; padding:6px 10px;" onclick="openOddsModal(${e.id}, ${e.red_odds}, ${e.black_odds})">⚙️</button>` : ""}
             </div>
             <div>⏱ ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
             <button class="red">🔴 x${e.red_odds}</button>
