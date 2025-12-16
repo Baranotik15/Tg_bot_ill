@@ -160,7 +160,37 @@ async def create_event(
         await session.commit()
         await session.refresh(event)
 
+        users = (await session.execute(select(User))).scalars().all()
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[
+                InlineKeyboardButton(
+                    text=f"🔴 Красные x{red_odds}",
+                    callback_data=f"bet_red:{event.id}"
+                ),
+                InlineKeyboardButton(
+                    text=f"⚫ Черные x{black_odds}",
+                    callback_data=f"bet_black:{event.id}"
+                )
+            ]]
+        )
+
+        for u in users:
+            try:
+                await context.bot.send_message(
+                    u.tg_id,
+                    f"🎲 <b>Начался матч!</b>\n\n"
+                    f"📌 <b>{event.event_title}</b>\n\n"
+                    f"⏱ Время на ставки: <b>10 минут</b>\n"
+                    f"🎰 Выберите на что поставить:\n\n"
+                    f"💳 Ваш баланс: <b>{u.balance}</b> баллов",
+                    reply_markup=keyboard
+                )
+            except Exception:
+                pass
+
     return {"ok": True, "event_id": event.id}
+
 
 
 @app.post("/admin/events/{event_id}/finish")
