@@ -47,6 +47,29 @@ async function loadMe() {
     renderAdminControls();
 }
 
+/* ---------------- TOP ---------------- */
+
+async function loadTop() {
+    const top = await api("/top");
+    const el = document.getElementById("top-list");
+    if (!el) return;
+
+    if (!top || top.length === 0) {
+        el.innerText = "Пока пусто 😔";
+        return;
+    }
+
+    const medals = ["🥇", "🥈", "🥉", "🔹", "🔹"];
+
+    el.innerHTML = top.map((u, i) => `
+        <div class="top-row">
+            <div class="top-rank">${medals[i] || "🔹"}</div>
+            <div class="top-name">${u.username}</div>
+            <div class="top-score"><b>${u.balance}</b></div>
+        </div>
+    `).join("");
+}
+
 /* ---------------- ADMIN ---------------- */
 
 function renderAdminControls() {
@@ -246,7 +269,9 @@ async function loadEvents() {
 
 /* ---------------- INIT ---------------- */
 
+loadTop();
 loadMe();
 loadEvents();
+setInterval(loadTop, 5000);
 setInterval(loadMe, 3000);
 setInterval(loadEvents, 3000);

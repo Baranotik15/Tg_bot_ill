@@ -112,6 +112,35 @@
             max-height: calc(100vh - 40px);
             overflow-y: auto;
         }
+
+        /* ---- TOP ---- */
+        #top-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        .top-row {
+            display: grid;
+            grid-template-columns: 26px 1fr auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .top-rank {
+            width: 26px;
+        }
+
+        .top-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .top-score {
+            font-variant-numeric: tabular-nums;
+        }
     </style>
 </head>
 
@@ -120,6 +149,11 @@
 
 <div class="container">
     <div id="admin-controls"></div>
+
+    <div class="card">
+        <div style="font-weight:bold; margin-bottom:8px">🏆 Топ 5 игроков</div>
+        <div id="top-list">Загрузка…</div>
+    </div>
 
     <div class="card">
         <div id="balance">Баланс: …</div>
@@ -132,6 +166,6 @@
     <div id="modal-content"></div>
 </div>
 
-<script src="/static/app.js?v=47"></script>
+<script src="/static/app.js?v=50"></script>
 </body>
 </html>

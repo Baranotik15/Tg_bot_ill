@@ -304,3 +304,25 @@ async def place_bet(
     )
 
     return {"ok": True}
+
+@app.get("/top")
+async def get_top(
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
+):
+    settings = context.settings
+    verify_init_data(tg_init_data, settings.bot_token)
+
+    async with get_session()() as session:
+        result = await session.execute(
+            select(User).order_by(User.balance.desc()).limit(5)
+        )
+        users = result.scalars().all()
+
+        return [
+            {
+                "username": u.username or f"id{u.tg_id}",
+                "balance": u.balance
+            }
+            for u in users
+        ]
+
