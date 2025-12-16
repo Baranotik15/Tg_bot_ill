@@ -1,3 +1,251 @@
+// Глобальные переменные для доступа из onclick
+let IS_ADMIN = false;
+let BALANCE = 0;
+let modal, modalContent, HEADERS;
+
+// Глобальные функции, которые будут определены после DOMContentLoaded
+let api, showModal, loadEvents, loadMe;
+
+// Глобальные функции для вызова из onclick в HTML
+window.closeModal = function() {
+    if (modal && modalContent) {
+        modal.style.display = "none";
+        modalContent.innerHTML = "";
+    }
+};
+
+window.submitCreate = async function() {
+    const title = document.getElementById("title")?.value.trim();
+    const red = parseFloat(document.getElementById("red")?.value.replace(",", "."));
+    const black = parseFloat(document.getElementById("black")?.value.replace(",", "."));
+
+    if (!title || isNaN(red) || isNaN(black) || red <= 0 || black <= 0) {
+        alert("Заполни все поля корректно");
+        return;
+    }
+
+    if (!api) {
+        alert("Система еще не загружена");
+        return;
+    }
+
+    await api("/admin/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, red_odds: red, black_odds: black })
+    });
+
+    window.closeModal();
+    if (loadEvents) loadEvents();
+};
+
+window.submitPromo = async function() {
+    const code = document.getElementById("promo-code")?.value.trim();
+    const amountRaw = document.getElementById("promo-amount")?.value.trim();
+    const limitRaw = document.getElementById("promo-limit")?.value.trim();
+
+    if (!code || !/^\d+$/.test(amountRaw) || !/^\d+$/.test(limitRaw)) {
+        alert("Заполни все поля корректно");
+        return;
+    }
+
+    const amount = Number(amountRaw);
+    const limit = Number(limitRaw);
+
+    if (amount <= 0 || limit <= 0) {
+        alert("Значения должны быть больше 0");
+        return;
+    }
+
+    if (!api) {
+        alert("Система еще не загружена");
+        return;
+    }
+
+    await api("/admin/promocodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, amount, limit })
+    });
+
+    window.closeModal();
+    alert("✅ Промокод создан");
+};
+
+window.openBetModal = function(eventId, side, odds, title) {
+    if (!showModal) {
+        alert("Система еще не загружена");
+        return;
+    }
+    showModal(`
+        <b>🎯 Оформление ставки</b>
+
+        <div style="margin-top:6px">🎲 ${title}</div>
+        <div style="margin-top:6px">
+            Команда: <b>${side === "red" ? "Красные 🔴" : "Черные ⚫"}</b>
+        </div>
+        <div style="margin-top:6px">Коэф: <b>x${odds}</b></div>
+        <div style="margin-top:6px">Баланс: <b>${BALANCE}</b></div>
+
+        <input id="bet-amount" type="text" placeholder="Введите сумму">
+
+        <button class="admin" onclick="window.submitBet(${eventId}, '${side}')">Поставить</button>
+        <button onclick="window.closeModal()">Отмена</button>
+    `);
+};
+
+window.submitBet = async function(eventId, side) {
+    const input = document.getElementById("bet-amount");
+    const rawValue = input?.value.trim();
+
+    if (rawValue === "") {
+        alert("Введите сумму ставки");
+        return;
+    }
+
+    if (!/^\d+$/.test(rawValue)) {
+        alert("Сумма должна быть числом");
+        return;
+    }
+
+    const amount = Number(rawValue);
+
+    if (amount <= 0) {
+        alert("Сумма должна быть больше 0");
+        return;
+    }
+
+    if (amount > BALANCE) {
+        alert("Недостаточно баллов");
+        return;
+    }
+
+    if (!api) {
+        alert("Система еще не загружена");
+        return;
+    }
+
+    await api("/bet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: eventId, side, amount })
+    });
+
+    window.closeModal();
+    if (loadMe) loadMe();
+};
+
+window.openOddsModal = function(eventId, redOdds, blackOdds) {
+    if (!showModal) {
+        alert("Система еще не загружена");
+        return;
+    }
+    showModal(`
+        <b>⚙️ Изменить коэффициенты</b>
+
+        <input id="odds-red" type="text" placeholder="Коэф 🔴" value="${redOdds}">
+        <input id="odds-black" type="text" placeholder="Коэф ⚫" value="${blackOdds}">
+
+        <button class="admin" onclick="window.submitOdds(${eventId})">Сохранить</button>
+        <button onclick="window.closeModal()">Отмена</button>
+    `);
+};
+
+window.submitOdds = async function(eventId) {
+    const red = parseFloat(document.getElementById("odds-red")?.value.replace(",", "."));
+    const black = parseFloat(document.getElementById("odds-black")?.value.replace(",", "."));
+
+    if (isNaN(red) || isNaN(black) || red <= 0 || black <= 0) {
+        alert("Заполни все поля корректно");
+        return;
+    }
+
+    if (!api) {
+        alert("Система еще не загружена");
+        return;
+    }
+
+    await api(`/admin/events/${eventId}/odds`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ red_odds: red, black_odds: black })
+    });
+
+    window.closeModal();
+    if (loadEvents) loadEvents();
+};
+
+window.openFinishModal = function(eventId) {
+    if (!showModal) {
+        alert("Система еще не загружена");
+        return;
+    }
+    showModal(`
+        <b>🏁 Завершить событие</b>
+
+        <div style="margin-top:6px">Выберите победителя:</div>
+
+        <button class="red" onclick="window.submitFinish(${eventId}, 'red')">🔴 Красные</button>
+        <button class="black" onclick="window.submitFinish(${eventId}, 'black')">⚫ Черные</button>
+        <button onclick="window.closeModal()">Отмена</button>
+    `);
+};
+
+window.submitFinish = async function(eventId, winner) {
+    if (!confirm("Вы уверены, что хотите завершить событие?")) {
+        return;
+    }
+
+    if (!api) {
+        alert("Система еще не загружена");
+        return;
+    }
+
+    await api(`/admin/events/${eventId}/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner })
+    });
+
+    window.closeModal();
+    if (loadEvents) loadEvents();
+};
+
+window.submitRedeemPromo = async function() {
+    const input = document.getElementById("redeem-promo-code");
+    const btn = document.getElementById("redeem-btn");
+    const code = input?.value.trim();
+
+    if (!code) {
+        alert("Введите промокод");
+        return;
+    }
+
+    if (!api) {
+        alert("Система еще не загружена");
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await api("/promocode/redeem", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code })
+        });
+
+        window.closeModal();
+        alert(`🎉 Промокод применён! +${res.added} баллов`);
+        if (loadMe) await loadMe();
+
+    } catch (e) {
+        alert(e.message || "Не удалось применить промокод");
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
 
 const tg = window.Telegram.WebApp;
@@ -6,15 +254,12 @@ tg.expand();
 const initData = tg.initData;
 if (!initData) throw new Error("No initData");
 
-const HEADERS = { "X-Telegram-Init-Data": initData };
+HEADERS = { "X-Telegram-Init-Data": initData };
 
-let IS_ADMIN = false;
-let BALANCE = 0;
+modal = document.getElementById("modal");
+modalContent = document.getElementById("modal-content");
 
-const modal = document.getElementById("modal");
-const modalContent = document.getElementById("modal-content");
-
-async function api(path, options = {}) {
+api = async function(path, options = {}) {
     const res = await fetch(path, {
         ...options,
         credentials: "same-origin",
@@ -33,19 +278,16 @@ async function api(path, options = {}) {
         throw new Error(msg);
     }
     return res.json();
-}
+};
 
 /* ---------------- MODAL ---------------- */
 
-function showModal(html) {
-    modalContent.innerHTML = html;
-    modal.style.display = "block";
-}
-
-function closeModal() {
-    modal.style.display = "none";
-    modalContent.innerHTML = "";
-}
+showModal = function(html) {
+    if (modalContent && modal) {
+        modalContent.innerHTML = html;
+        modal.style.display = "block";
+    }
+};
 
 /* ---------------- PROMO BUTTON ---------------- */
 
@@ -71,14 +313,14 @@ function renderPromoButton() {
 
 /* ---------------- USER ---------------- */
 
-async function loadMe() {
+loadMe = async function() {
     const me = await api("/me");
     IS_ADMIN = me.is_admin;
     BALANCE = me.balance;
     document.getElementById("balance").innerText = `💰 Баланс: ${BALANCE}`;
     renderAdminControls();
     renderPromoButton();
-}
+};
 
 /* ---------------- TOP ---------------- */
 
@@ -138,29 +380,9 @@ function openCreateModal() {
         <input id="red" type="text" placeholder="Коэф 🔴">
         <input id="black" type="text" placeholder="Коэф ⚫">
 
-        <button class="admin" onclick="submitCreate()">Создать</button>
-        <button onclick="closeModal()">Отмена</button>
+        <button class="admin" onclick="window.submitCreate()">Создать</button>
+        <button onclick="window.closeModal()">Отмена</button>
     `);
-}
-
-async function submitCreate() {
-    const title = document.getElementById("title").value.trim();
-    const red = parseFloat(document.getElementById("red").value.replace(",", "."));
-    const black = parseFloat(document.getElementById("black").value.replace(",", "."));
-
-    if (!title || isNaN(red) || isNaN(black) || red <= 0 || black <= 0) {
-        alert("Заполни все поля корректно");
-        return;
-    }
-
-    await api("/admin/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, red_odds: red, black_odds: black })
-    });
-
-    closeModal();
-    loadEvents();
 }
 
 /* ---------------- PROMOCODES ---------------- */
@@ -173,98 +395,16 @@ function openPromoModal() {
         <input id="promo-amount" type="text" placeholder="Сколько баллов">
         <input id="promo-limit" type="text" placeholder="Количество использований">
 
-        <button class="admin" onclick="submitPromo()">Создать</button>
-        <button onclick="closeModal()">Отмена</button>
+        <button class="admin" onclick="window.submitPromo()">Создать</button>
+        <button onclick="window.closeModal()">Отмена</button>
     `);
-}
-
-async function submitPromo() {
-    const code = document.getElementById("promo-code").value.trim();
-    const amountRaw = document.getElementById("promo-amount").value.trim();
-    const limitRaw = document.getElementById("promo-limit").value.trim();
-
-    if (!code || !/^\d+$/.test(amountRaw) || !/^\d+$/.test(limitRaw)) {
-        alert("Заполни все поля корректно");
-        return;
-    }
-
-    const amount = Number(amountRaw);
-    const limit = Number(limitRaw);
-
-    if (amount <= 0 || limit <= 0) {
-        alert("Значения должны быть больше 0");
-        return;
-    }
-
-    await api("/admin/promocodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, amount, limit })
-    });
-
-    closeModal();
-    alert("✅ Промокод создан");
 }
 
 /* ---------------- BETTING ---------------- */
 
-function openBetModal(eventId, side, odds, title) {
-    showModal(`
-        <b>🎯 Оформление ставки</b>
-
-        <div style="margin-top:6px">🎲 ${title}</div>
-        <div style="margin-top:6px">
-            Команда: <b>${side === "red" ? "Красные 🔴" : "Черные ⚫"}</b>
-        </div>
-        <div style="margin-top:6px">Коэф: <b>x${odds}</b></div>
-        <div style="margin-top:6px">Баланс: <b>${BALANCE}</b></div>
-
-        <input id="bet-amount" type="text" placeholder="Введите сумму">
-
-        <button class="admin" onclick="submitBet(${eventId}, '${side}')">Поставить</button>
-        <button onclick="closeModal()">Отмена</button>
-    `);
-}
-
-async function submitBet(eventId, side) {
-    const input = document.getElementById("bet-amount");
-    const rawValue = input.value.trim();
-
-    if (rawValue === "") {
-        alert("Введите сумму ставки");
-        return;
-    }
-
-    if (!/^\d+$/.test(rawValue)) {
-        alert("Сумма должна быть числом");
-        return;
-    }
-
-    const amount = Number(rawValue);
-
-    if (amount <= 0) {
-        alert("Сумма должна быть больше 0");
-        return;
-    }
-
-    if (amount > BALANCE) {
-        alert("Недостаточно баллов");
-        return;
-    }
-
-    await api("/bet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: eventId, side, amount })
-    });
-
-    closeModal();
-    loadMe();
-}
-
 /* ---------------- EVENTS ---------------- */
 
-async function loadEvents() {
+loadEvents = async function() {
     const events = await api("/events");
     const container = document.getElementById("events");
     const emptyState = document.getElementById("empty-state");
@@ -286,25 +426,26 @@ async function loadEvents() {
         card.className = "card";
         card.id = `event-${e.id}`;
 
+        const safeTitleEscaped = safeTitle.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
         card.innerHTML = `
             <div class="event-head">
                 <b>${safeTitle}</b>
-                ${IS_ADMIN ? `<button class="gear" onclick="openOddsModal(${e.id}, ${e.red_odds}, ${e.black_odds})">⚙️</button>` : ""}
+                ${IS_ADMIN ? `<button class="gear" onclick="window.openOddsModal(${e.id}, ${e.red_odds}, ${e.black_odds})">⚙️</button>` : ""}
             </div>
 
             <div>⏱ ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
 
             <button class="red bet-btn"
-                onclick="openBetModal(${e.id}, 'red', ${e.red_odds}, '${safeTitle}')">
+                onclick="window.openBetModal(${e.id}, 'red', ${e.red_odds}, '${safeTitleEscaped}')">
                 🔴 x${e.red_odds}
             </button>
 
             <button class="black bet-btn"
-                onclick="openBetModal(${e.id}, 'black', ${e.black_odds}, '${safeTitle}')">
+                onclick="window.openBetModal(${e.id}, 'black', ${e.black_odds}, '${safeTitleEscaped}')">
                 ⚫ x${e.black_odds}
             </button>
 
-            ${IS_ADMIN ? `<button class="admin" onclick="openFinishModal(${e.id})">Завершить</button>` : ""}
+            ${IS_ADMIN ? `<button class="admin" onclick="window.openFinishModal(${e.id})">Завершить</button>` : ""}
         `;
 
         container.appendChild(card);
@@ -319,40 +460,9 @@ function openRedeemPromoModal() {
 
         <input id="redeem-promo-code" type="text" placeholder="Введите промокод">
 
-        <button id="redeem-btn" class="promo" onclick="submitRedeemPromo()">Применить</button>
-        <button onclick="closeModal()">Отмена</button>
+        <button id="redeem-btn" class="promo" onclick="window.submitRedeemPromo()">Применить</button>
+        <button onclick="window.closeModal()">Отмена</button>
     `);
-}
-
-
-async function submitRedeemPromo() {
-    const input = document.getElementById("redeem-promo-code");
-    const btn = document.getElementById("redeem-btn");
-    const code = input.value.trim();
-
-    if (!code) {
-        alert("Введите промокод");
-        return;
-    }
-
-    if (btn) btn.disabled = true;
-
-    try {
-        const res = await api("/promocode/redeem", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code })
-        });
-
-        closeModal();
-        alert(`🎉 Промокод применён! +${res.added} баллов`);
-        await loadMe();
-
-    } catch (e) {
-        alert(e.message || "Не удалось применить промокод");
-    } finally {
-        if (btn) btn.disabled = false;
-    }
 }
 
 /* ---------------- INIT ---------------- */
