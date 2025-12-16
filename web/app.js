@@ -152,8 +152,16 @@ window.openOddsModal = function(eventId, redOdds, blackOdds) {
 };
 
 window.submitOdds = async function(eventId) {
-    const red = parseFloat(document.getElementById("odds-red")?.value.replace(",", "."));
-    const black = parseFloat(document.getElementById("odds-black")?.value.replace(",", "."));
+    const redInput = document.getElementById("odds-red");
+    const blackInput = document.getElementById("odds-black");
+    
+    if (!redInput || !blackInput) {
+        alert("Ошибка: поля не найдены");
+        return;
+    }
+
+    const red = parseFloat(redInput.value.replace(",", "."));
+    const black = parseFloat(blackInput.value.replace(",", "."));
 
     if (isNaN(red) || isNaN(black) || red <= 0 || black <= 0) {
         alert("Заполни все поля корректно");
@@ -165,14 +173,19 @@ window.submitOdds = async function(eventId) {
         return;
     }
 
-    await api(`/admin/events/${eventId}/odds`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ red_odds: red, black_odds: black })
-    });
+    try {
+        await api(`/admin/events/${eventId}/odds`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ red_odds: red, black_odds: black })
+        });
 
-    window.closeModal();
-    if (loadEvents) loadEvents();
+        window.closeModal();
+        if (loadEvents) loadEvents();
+        alert("✅ Коэффициенты успешно изменены");
+    } catch (e) {
+        alert(e.message || "Не удалось изменить коэффициенты");
+    }
 };
 
 window.openFinishModal = function(eventId) {
