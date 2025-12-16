@@ -25,8 +25,6 @@ async function api(path, options = {}) {
     return res.json();
 }
 
-/* ---------------- MODAL ---------------- */
-
 function showModal(html) {
     modalContent.innerHTML = html;
     modal.style.display = "block";
@@ -37,8 +35,6 @@ function closeModal() {
     modalContent.innerHTML = "";
 }
 
-/* ---------------- USER ---------------- */
-
 async function loadMe() {
     const me = await api("/me");
     IS_ADMIN = me.is_admin;
@@ -46,8 +42,6 @@ async function loadMe() {
     document.getElementById("balance").innerText = `💰 Баланс: ${BALANCE}`;
     renderAdminControls();
 }
-
-/* ---------------- ADMIN CONTROLS ---------------- */
 
 function renderAdminControls() {
     const c = document.getElementById("admin-controls");
@@ -94,11 +88,9 @@ async function submitCreate() {
     loadEvents();
 }
 
-/* ---------------- BETTING ---------------- */
-
 function openBetModal(eventId, side, odds, title) {
     showModal(`
-        <b>🎯 Ставка принята будет сразу</b>
+        <b>🎯 Ставка будет принята сразу</b>
 
         <div style="margin-top:6px">📌 ${title}</div>
         <div style="margin-top:6px">
@@ -107,7 +99,7 @@ function openBetModal(eventId, side, odds, title) {
         <div style="margin-top:6px">Коэф: <b>x${odds}</b></div>
         <div style="margin-top:6px">Баланс: <b>${BALANCE}</b></div>
 
-        <input id="bet-amount" type="text" inputmode="numeric" placeholder="Введите сумму">
+        <input id="bet-amount" type="number" inputmode="numeric" placeholder="Введите сумму">
 
         <button class="admin" onclick="submitBet(${eventId}, '${side}')">Поставить</button>
         <button onclick="closeModal()">Отмена</button>
@@ -131,8 +123,6 @@ async function submitBet(eventId, side) {
     closeModal();
     loadMe();
 }
-
-/* ---------------- EVENTS ---------------- */
 
 function openOddsModal(id, red, black) {
     showModal(`
@@ -187,33 +177,32 @@ async function finishEvent(id, winner) {
     document.getElementById(`event-${id}`)?.remove();
 }
 
-/* ---------------- RENDER EVENTS ---------------- */
-
 async function loadEvents() {
     const events = await api("/events");
     const container = document.getElementById("events");
     container.innerHTML = "";
 
     for (const e of events) {
+        const safeTitle = e.title.replace(/'/g, "&#39;");
         const card = document.createElement("div");
         card.className = "card";
         card.id = `event-${e.id}`;
 
         card.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center">
-                <b>${e.title}</b>
+            <div class="event-head">
+                <b>${safeTitle}</b>
                 ${IS_ADMIN ? `<button class="gear" onclick="openOddsModal(${e.id}, ${e.red_odds}, ${e.black_odds})">⚙️</button>` : ""}
             </div>
 
             <div>⏱ ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
 
             <button class="red bet-btn"
-                onclick="openBetModal(${e.id}, 'red', ${e.red_odds}, '${e.title}')">
+                onclick="openBetModal(${e.id}, 'red', ${e.red_odds}, '${safeTitle}')">
                 🔴 x${e.red_odds}
             </button>
 
             <button class="black bet-btn"
-                onclick="openBetModal(${e.id}, 'black', ${e.black_odds}, '${e.title}')">
+                onclick="openBetModal(${e.id}, 'black', ${e.black_odds}, '${safeTitle}')">
                 ⚫ x${e.black_odds}
             </button>
 
@@ -223,8 +212,6 @@ async function loadEvents() {
         container.appendChild(card);
     }
 }
-
-/* ---------------- INIT ---------------- */
 
 loadMe();
 loadEvents();

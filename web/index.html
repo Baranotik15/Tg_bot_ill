@@ -32,6 +32,13 @@
             border-radius: 12px;
             padding: 14px;
             margin-bottom: 14px;
+            position: relative;
+        }
+
+        .event-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         button {
@@ -41,6 +48,14 @@
             border: none;
             margin-top: 8px;
             font-size: 15px;
+            cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease, opacity .15s;
+        }
+
+        button:hover {
+            transform: scale(1.03);
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+            opacity: .95;
         }
 
         .red {
@@ -59,6 +74,21 @@
             color: #fff;
         }
 
+        .gear {
+            width: auto;
+            padding: 4px 6px;
+            font-size: 16px;
+            background: transparent;
+            color: #9ca3af;
+            margin: 0;
+        }
+
+        .gear:hover {
+            color: #fff;
+            box-shadow: none;
+            transform: scale(1.15);
+        }
+
         input {
             width: 100%;
             padding: 10px;
@@ -66,16 +96,6 @@
             border: none;
             margin-top: 8px;
             font-size: 16px;
-        }
-
-        .bet-btn {
-            cursor: pointer;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .bet-btn:hover {
-            transform: scale(1.03);
-            box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
         }
 
         #modal {
@@ -113,6 +133,6 @@
     <div id="modal-content"></div>
 </div>
 
-<script src="/static/app.js?v=40"></script>
+<script src="/static/app.js?v=42"></script>
 </body>
 </html>
