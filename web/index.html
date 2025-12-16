@@ -159,18 +159,33 @@
         <div id="balance">Баланс: …</div>
     </div>
 
-    <!-- EMPTY STATE WITHOUT CARD -->
-    <div id="empty-state" style="display:none; text-align:center; padding:24px;">
+    <!-- EMPTY STATE -->
+    <div id="empty-state" style="display:none; text-align:center; padding:32px 16px;">
         <img
-            src="/static/1.png?v=3"
+            src="/static/sad_mafia.png?v=3"
             alt="Нет событий"
-            style="width:180px; margin:12px auto; display:block;">
+            style="
+                width:320px;
+                max-width:90%;
+                margin:28px auto 20px;
+                display:block;
+            ">
 
-        <div style="opacity:.7; font-size:14px;">
+        <div style="
+            font-size:18px;
+            font-weight:600;
+            margin-bottom:6px;
+        ">
+            Нет событий
+        </div>
+
+        <div style="
+            font-size:15px;
+            opacity:.75;
+        ">
             Сейчас нет активных событий
         </div>
     </div>
-
 
     <div id="events"></div>
 </div>
@@ -179,6 +194,6 @@
     <div id="modal-content"></div>
 </div>
 
-<script src="/static/app.js?v=54"></script>
+<script src="/static/app.js?v=53"></script>
 </body>
 </html>
