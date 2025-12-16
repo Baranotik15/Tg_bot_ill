@@ -115,11 +115,24 @@ function openBetModal(eventId, side, odds, title) {
 }
 
 async function submitBet(eventId, side) {
-    const raw = document.getElementById("bet-amount").value.trim();
-    const amount = parseInt(raw, 10);
+    const input = document.getElementById("bet-amount");
+    const rawValue = input.value.trim();
 
-    if (!raw || isNaN(amount) || amount <= 0) {
-        alert("Введите корректную сумму");
+    // ❗ НИЧЕГО НЕ МЕНЯЕМ В INPUT
+    if (rawValue === "") {
+        alert("Введите сумму ставки");
+        return;
+    }
+
+    if (!/^\d+$/.test(rawValue)) {
+        alert("Сумма должна быть числом");
+        return;
+    }
+
+    const amount = Number(rawValue);
+
+    if (amount <= 0) {
+        alert("Сумма должна быть больше 0");
         return;
     }
 
