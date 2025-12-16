@@ -23,6 +23,7 @@ from bot.db import (
     Bet, PromoCode, redeem_promo,
 )
 from bot.handlers.betting import settle_event
+from bot.utils.logger import audit
 
 
 app = FastAPI(title="MafBot Web API")
@@ -133,7 +134,14 @@ async def create_event(
     payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
-    get_admin_id(tg_init_data)
+    settings = context.settings
+    data = verify_init_data(tg_init_data, settings.bot_token)
+    user_data = json.loads(data["user"])
+    tg_id = int(user_data["id"])
+    username = user_data.get("username")
+
+    if tg_id not in settings.admin_ids:
+        raise HTTPException(status_code=403)
 
     title = payload.get("title")
     red_odds = float(payload.get("red_odds", 0))
@@ -189,6 +197,18 @@ async def create_event(
             except Exception:
                 pass
 
+    # Логирование создания события
+    if context.logger:
+        audit(context.logger, "web_event_created", {
+            "admin_tg_id": tg_id,
+            "admin_username": username,
+            "event_id": event.id,
+            "event_title": title,
+            "red_odds": red_odds,
+            "black_odds": black_odds,
+            "source": "web"
+        })
+
     return {"ok": True, "event_id": event.id}
 
 
@@ -199,21 +219,42 @@ async def finish_event(
     payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
-    get_admin_id(tg_init_data)
+    settings = context.settings
+    data = verify_init_data(tg_init_data, settings.bot_token)
+    user_data = json.loads(data["user"])
+    tg_id = int(user_data["id"])
+    username = user_data.get("username")
+
+    if tg_id not in settings.admin_ids:
+        raise HTTPException(status_code=403)
 
     winner = payload.get("winner")
     if winner not in ("red", "black"):
         raise HTTPException(status_code=400)
 
+    event_title = None
     async with get_session()() as session:
         event = await session.get(Event, event_id)
         if not event or event.status != EventStatus.OPEN:
             raise HTTPException(status_code=400)
 
+        event_title = event.event_title
         event.outcome = Outcome.RED if winner == "red" else Outcome.BLACK
         await session.commit()
 
     await settle_event(event_id, context.bot)
+
+    # Логирование завершения события
+    if context.logger:
+        audit(context.logger, "web_event_finished", {
+            "admin_tg_id": tg_id,
+            "admin_username": username,
+            "event_id": event_id,
+            "event_title": event_title,
+            "winner": winner,
+            "source": "web"
+        })
+
     return {"ok": True}
 
 
@@ -223,7 +264,14 @@ async def change_odds(
     payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
-    get_admin_id(tg_init_data)
+    settings = context.settings
+    data = verify_init_data(tg_init_data, settings.bot_token)
+    user_data = json.loads(data["user"])
+    tg_id = int(user_data["id"])
+    username = user_data.get("username")
+
+    if tg_id not in settings.admin_ids:
+        raise HTTPException(status_code=403)
 
     red = float(payload.get("red_odds", 0))
     black = float(payload.get("black_odds", 0))
@@ -236,9 +284,26 @@ async def change_odds(
         if not event or event.status != EventStatus.OPEN:
             raise HTTPException(status_code=400)
 
+        old_red = event.red_odds
+        old_black = event.black_odds
+
         event.red_odds = red
         event.black_odds = black
         await session.commit()
+
+    # Логирование изменения коэффициентов
+    if context.logger:
+        audit(context.logger, "web_odds_changed", {
+            "admin_tg_id": tg_id,
+            "admin_username": username,
+            "event_id": event_id,
+            "event_title": event.event_title,
+            "old_red_odds": old_red,
+            "new_red_odds": red,
+            "old_black_odds": old_black,
+            "new_black_odds": black,
+            "source": "web"
+        })
 
     return {"ok": True}
 
@@ -254,6 +319,7 @@ async def place_bet(
     data = verify_init_data(tg_init_data, settings.bot_token)
     user_data = json.loads(data["user"])
     tg_id = int(user_data["id"])
+    username = user_data.get("username")
 
     event_id = int(payload.get("event_id", 0))
     side = payload.get("side")
@@ -289,6 +355,7 @@ async def place_bet(
         user.balance -= amount
         session.add(bet)
         await session.commit()
+        await session.refresh(bet)
 
         new_balance = user.balance
 
@@ -302,6 +369,23 @@ async def place_bet(
         f"🏆 <b>Ожидаемый выигрыш:</b> {expected_win} баллов 💰\n"
         f"💳 <b>Ваш текущий баланс:</b> {new_balance} баллов"
     )
+
+    # Логирование ставки
+    if context.logger:
+        audit(context.logger, "web_bet_placed", {
+            "user_id": user.id,
+            "tg_id": tg_id,
+            "username": username,
+            "bet_id": bet.id,
+            "event_id": event_id,
+            "event_title": event.event_title,
+            "side": side,
+            "amount": amount,
+            "odds": odds,
+            "expected_win": expected_win,
+            "balance_after": new_balance,
+            "source": "web"
+        })
 
     return {"ok": True}
 
@@ -331,7 +415,14 @@ async def create_promocode(
     payload: dict,
     tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
 ):
-    get_admin_id(tg_init_data)
+    settings = context.settings
+    data = verify_init_data(tg_init_data, settings.bot_token)
+    user_data = json.loads(data["user"])
+    tg_id = int(user_data["id"])
+    username = user_data.get("username")
+
+    if tg_id not in settings.admin_ids:
+        raise HTTPException(status_code=403)
 
     code = payload.get("code")
     amount = payload.get("amount")
@@ -375,6 +466,18 @@ async def create_promocode(
         await session.commit()
         await session.refresh(promo)
 
+    # Логирование создания промокода
+    if context.logger:
+        audit(context.logger, "web_promo_created", {
+            "admin_tg_id": tg_id,
+            "admin_username": username,
+            "promo_code": promo.code,
+            "amount": amount,
+            "uses_left": uses_left,
+            "expires_at": str(expires_at) if expires_at else None,
+            "source": "web"
+        })
+
     return {
         "ok": True,
         "promo": {
@@ -396,6 +499,7 @@ async def redeem_promocode(
     data = verify_init_data(tg_init_data, settings.bot_token)
     user_data = json.loads(data["user"])
     tg_id = int(user_data["id"])
+    username = user_data.get("username")
 
     code = payload.get("code")
 
@@ -413,9 +517,19 @@ async def redeem_promocode(
         added = await redeem_promo(user.id, code.upper())
         await context.bot.send_message(
             tg_id,
-            f"🎉 <b>Промокод применён!</b>\n"
-            f"➕ Начислено {added} баллов 💵"
+            f"🎉 <b>Промокод применён! Начислено {added} баллов 💵"
         )
+
+        # Логирование применения промокода
+        if context.logger:
+            audit(context.logger, "web_promo_redeemed", {
+                "user_id": user.id,
+                "tg_id": tg_id,
+                "username": username,
+                "promo_code": code.upper(),
+                "points_added": added,
+                "source": "web"
+            })
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
