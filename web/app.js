@@ -214,14 +214,19 @@ window.submitFinish = async function(eventId, winner) {
         return;
     }
 
-    await api(`/admin/events/${eventId}/finish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ winner })
-    });
+    try {
+        await api(`/admin/events/${eventId}/finish`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ winner })
+        });
 
-    window.closeModal();
-    if (loadEvents) loadEvents();
+        window.closeModal();
+        if (loadEvents) loadEvents();
+        alert("✅ Событие успешно завершено");
+    } catch (e) {
+        alert(e.message || "Не удалось завершить событие");
+    }
 };
 
 window.submitRedeemPromo = async function() {
@@ -485,6 +490,6 @@ loadMe();
 loadEvents();
 setInterval(loadTop, 5000);
 setInterval(loadMe, 3000);
-setInterval(loadEvents, 3000);
+setInterval(loadEvents, 1000);
 
 });
