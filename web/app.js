@@ -77,11 +77,24 @@ function renderAdminControls() {
     c.innerHTML = "";
     if (!IS_ADMIN) return;
 
-    const btn = document.createElement("button");
-    btn.className = "admin";
-    btn.innerText = "➕ Создать событие";
-    btn.onclick = openCreateModal;
-    c.appendChild(btn);
+    const row = document.createElement("div");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "1fr 1fr";
+    row.style.gap = "10px";
+
+    const btnEvent = document.createElement("button");
+    btnEvent.className = "admin";
+    btnEvent.innerText = "➕ Создать событие";
+    btnEvent.onclick = openCreateModal;
+
+    const btnPromo = document.createElement("button");
+    btnPromo.className = "admin";
+    btnPromo.innerText = "🎟 Создать промокод";
+    btnPromo.onclick = openPromoModal;
+
+    row.appendChild(btnEvent);
+    row.appendChild(btnPromo);
+    c.appendChild(row);
 }
 
 function openCreateModal() {
@@ -117,6 +130,49 @@ async function submitCreate() {
     loadEvents();
 }
 
+/* ---------------- PROMOCODES ---------------- */
+
+function openPromoModal() {
+    showModal(`
+        <b>🎟 Создание промокода</b>
+
+        <input id="promo-code" type="text" placeholder="Код промокода">
+        <input id="promo-amount" type="text" placeholder="Сколько баллов">
+        <input id="promo-limit" type="text" placeholder="Количество использований">
+
+        <button class="admin" onclick="submitPromo()">Создать</button>
+        <button onclick="closeModal()">Отмена</button>
+    `);
+}
+
+async function submitPromo() {
+    const code = document.getElementById("promo-code").value.trim();
+    const amountRaw = document.getElementById("promo-amount").value.trim();
+    const limitRaw = document.getElementById("promo-limit").value.trim();
+
+    if (!code || !/^\d+$/.test(amountRaw) || !/^\d+$/.test(limitRaw)) {
+        alert("Заполни все поля корректно");
+        return;
+    }
+
+    const amount = Number(amountRaw);
+    const limit = Number(limitRaw);
+
+    if (amount <= 0 || limit <= 0) {
+        alert("Значения должны быть больше 0");
+        return;
+    }
+
+    await api("/admin/promocodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, amount, limit })
+    });
+
+    closeModal();
+    alert("✅ Промокод создан");
+}
+
 /* ---------------- BETTING ---------------- */
 
 function openBetModal(eventId, side, odds, title) {
@@ -141,7 +197,6 @@ async function submitBet(eventId, side) {
     const input = document.getElementById("bet-amount");
     const rawValue = input.value.trim();
 
-    // ❗ НИЧЕГО НЕ МЕНЯЕМ В INPUT
     if (rawValue === "") {
         alert("Введите сумму ставки");
         return;

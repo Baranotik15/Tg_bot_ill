@@ -20,7 +20,7 @@ from bot.db import (
     Event,
     EventStatus,
     Outcome,
-    Bet,
+    Bet, PromoCode,
 )
 from bot.handlers.betting import settle_event
 
@@ -325,4 +325,64 @@ async def get_top(
             }
             for u in users
         ]
+
+@app.post("/admin/promocodes")
+async def create_promocode(
+    payload: dict,
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
+):
+    get_admin_id(tg_init_data)
+
+    code = payload.get("code")
+    amount = payload.get("amount")
+    uses_left = payload.get("limit")
+    expires_at_raw = payload.get("expires_at")  # optional
+
+    if not code or not isinstance(code, str):
+        raise HTTPException(status_code=400, detail="Неверный код")
+
+    try:
+        amount = int(amount)
+        uses_left = int(uses_left)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Неверные числовые значения")
+
+    if amount <= 0 or uses_left <= 0:
+        raise HTTPException(status_code=400, detail="amount и limit должны быть > 0")
+
+    expires_at = None
+    if expires_at_raw:
+        try:
+            expires_at = datetime.fromisoformat(expires_at_raw)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Неверный формат expires_at")
+
+    async with get_session()() as session:
+        existing = await session.scalar(
+            select(PromoCode).where(PromoCode.code == code.upper())
+        )
+        if existing:
+            raise HTTPException(status_code=400, detail="Промокод уже существует")
+
+        promo = PromoCode(
+            code=code.upper(),
+            amount=amount,
+            uses_left=uses_left,
+            expires_at=expires_at,
+        )
+
+        session.add(promo)
+        await session.commit()
+        await session.refresh(promo)
+
+    return {
+        "ok": True,
+        "promo": {
+            "code": promo.code,
+            "amount": promo.amount,
+            "uses_left": promo.uses_left,
+            "expires_at": promo.expires_at,
+        }
+    }
+
 
