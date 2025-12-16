@@ -1,3 +1,5 @@
+document.addEventListener("DOMContentLoaded", () => {
+
 const tg = window.Telegram.WebApp;
 tg.expand();
 
@@ -344,7 +346,6 @@ function openRedeemPromoModal() {
     `);
 }
 
-
 async function submitRedeemPromo() {
     const input = document.getElementById("redeem-promo-code");
     const code = input.value.trim();
@@ -378,3 +379,5 @@ loadEvents();
 setInterval(loadTop, 5000);
 setInterval(loadMe, 3000);
 setInterval(loadEvents, 3000);
+
+});
