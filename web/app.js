@@ -39,6 +39,28 @@ function closeModal() {
     modalContent.innerHTML = "";
 }
 
+/* ---------------- PROMO BUTTON ---------------- */
+
+function renderPromoButton() {
+    if (document.getElementById("redeem-promo-btn")) return;
+
+    const container = document.querySelector(".container");
+    if (!container) return;
+
+    const btn = document.createElement("button");
+    btn.id = "redeem-promo-btn";
+    btn.className = "promo";
+    btn.innerText = "🎁 Ввести промокод";
+    btn.onclick = openRedeemPromoModal;
+
+    const balanceCard = document.getElementById("balance")?.parentElement;
+    if (balanceCard) {
+        container.insertBefore(btn, balanceCard);
+    } else {
+        container.appendChild(btn);
+    }
+}
+
 /* ---------------- USER ---------------- */
 
 async function loadMe() {
@@ -47,6 +69,7 @@ async function loadMe() {
     BALANCE = me.balance;
     document.getElementById("balance").innerText = `💰 Баланс: ${BALANCE}`;
     renderAdminControls();
+    renderPromoButton();
 }
 
 /* ---------------- TOP ---------------- */
@@ -233,61 +256,6 @@ async function submitBet(eventId, side) {
 
 /* ---------------- EVENTS ---------------- */
 
-function openOddsModal(id, red, black) {
-    showModal(`
-        <b>⚙️ Изменить коэффициенты</b>
-
-        <input id="red-odds" type="text" value="${red}">
-        <input id="black-odds" type="text" value="${black}">
-
-        <button class="admin" onclick="submitOdds(${id})">Сохранить</button>
-        <button onclick="closeModal()">Отмена</button>
-    `);
-}
-
-async function submitOdds(id) {
-    const red = parseFloat(document.getElementById("red-odds").value.replace(",", "."));
-    const black = parseFloat(document.getElementById("black-odds").value.replace(",", "."));
-
-    if (isNaN(red) || isNaN(black) || red <= 0 || black <= 0) {
-        alert("Введите корректные коэффициенты");
-        return;
-    }
-
-    await api(`/admin/events/${id}/odds`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ red_odds: red, black_odds: black })
-    });
-
-    closeModal();
-    loadEvents();
-}
-
-function openFinishModal(id) {
-    showModal(`
-        <b>🏁 Завершить событие</b>
-
-        <button class="red" onclick="finishEvent(${id}, 'red')">🔴 Красные</button>
-        <button class="black" onclick="finishEvent(${id}, 'black')">⚫ Черные</button>
-
-        <button onclick="closeModal()">Отмена</button>
-    `);
-}
-
-async function finishEvent(id, winner) {
-    await api(`/admin/events/${id}/finish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ winner })
-    });
-
-    closeModal();
-    document.getElementById(`event-${id}`)?.remove();
-}
-
-/* ---------------- RENDER ---------------- */
-
 async function loadEvents() {
     const events = await api("/events");
     const container = document.getElementById("events");
@@ -334,6 +302,8 @@ async function loadEvents() {
         container.appendChild(card);
     }
 }
+
+/* ---------------- PROMO REDEEM ---------------- */
 
 function openRedeemPromoModal() {
     showModal(`
