@@ -16,10 +16,7 @@ async function api(path, options = {}) {
     const res = await fetch(path, {
         ...options,
         credentials: "same-origin",
-        headers: {
-            ...HEADERS,
-            ...(options.headers || {})
-        }
+        headers: { ...HEADERS, ...(options.headers || {}) }
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -28,9 +25,10 @@ async function api(path, options = {}) {
 function showModal(html, focusId = null) {
     modalContent.innerHTML = html;
     modal.style.display = "block";
-
     setTimeout(() => {
-        const el = focusId ? document.getElementById(focusId) : modalContent.querySelector("input,textarea");
+        const el = focusId
+            ? document.getElementById(focusId)
+            : modalContent.querySelector("input");
         if (el) {
             el.focus();
             el.click();
@@ -43,126 +41,69 @@ function closeModal() {
     modalContent.innerHTML = "";
 }
 
-modal.addEventListener("click", (e) => {
-    if (e.target === modal) closeModal();
-});
+modal.onclick = e => e.target === modal && closeModal();
 
 async function loadMe() {
     const me = await api("/me");
     IS_ADMIN = me.is_admin;
     document.getElementById("balance").innerText = `💰 Баланс: ${me.balance}`;
-    renderAdminControls();
 }
 
-function renderAdminControls() {
-    const c = document.getElementById("admin-controls");
-    c.innerHTML = "";
-    if (!IS_ADMIN) return;
-
-    const btn = document.createElement("button");
-    btn.className = "admin";
-    btn.innerText = "➕ Создать событие";
-    btn.onclick = openCreateModal;
-    c.appendChild(btn);
-}
-
-function openCreateModal() {
+async function placeBet(eventId, side, odds, title, balance) {
     showModal(`
-        <input id="title" type="text" placeholder="Название" autocomplete="off">
-        <input id="red" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="Коэф 🔴" autocomplete="off" enterkeyhint="next">
-        <input id="black" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="Коэф ⚫" autocomplete="off" enterkeyhint="done">
-        <button class="admin" onclick="submitCreate()">Создать</button>
+        <b>${title}</b><br><br>
+        🎯 Ставка на: <b>${side === "red" ? "Красных 🔴" : "Черных ⚫"}</b><br>
+        📈 Коэффициент: <b>${odds}x</b><br><br>
+        💳 Баланс: <b>${balance}</b><br><br>
+        <input id="bet-amount" type="text" inputmode="numeric" placeholder="Введите сумму">
+        <button class="admin" onclick="submitBet(${eventId}, '${side}')">Сделать ставку</button>
         <button onclick="closeModal()">Отмена</button>
-    `, "title");
+    `, "bet-amount");
 }
 
-async function submitCreate() {
-    const title = document.getElementById("title").value.trim();
-    const red = parseFloat(document.getElementById("red").value.replace(",", "."));
-    const black = parseFloat(document.getElementById("black").value.replace(",", "."));
-
-    if (!title || isNaN(red) || isNaN(black) || red <= 0 || black <= 0) {
-        alert("Заполни все поля корректно");
+async function submitBet(eventId, side) {
+    const amount = document.getElementById("bet-amount").value.trim();
+    if (!amount || isNaN(amount) || Number(amount) <= 0) {
+        alert("Введите корректную сумму");
         return;
     }
 
-    await api("/admin/events", {
+    await api("/bet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, red_odds: red, black_odds: black })
+        body: JSON.stringify({ event_id: eventId, side })
     });
 
     closeModal();
-    loadEvents();
-}
-
-function openOddsModal(id, red, black) {
-    showModal(`
-        <input id="red-odds" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${red}" autocomplete="off" enterkeyhint="next">
-        <input id="black-odds" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${black}" autocomplete="off" enterkeyhint="done">
-        <button class="admin" onclick="submitOdds(${id})">Сохранить</button>
-        <button onclick="closeModal()">Отмена</button>
-    `, "red-odds");
-}
-
-async function submitOdds(id) {
-    const red = parseFloat(document.getElementById("red-odds").value.replace(",", "."));
-    const black = parseFloat(document.getElementById("black-odds").value.replace(",", "."));
-
-    if (isNaN(red) || isNaN(black) || red <= 0 || black <= 0) {
-        alert("Введите корректные коэффициенты");
-        return;
-    }
-
-    await api(`/admin/events/${id}/odds`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ red_odds: red, black_odds: black })
-    });
-
-    closeModal();
-    loadEvents();
-}
-
-function openFinishModal(id) {
-    showModal(`
-        <button class="red" onclick="finishEvent(${id}, 'red')">🔴 Красные</button>
-        <button class="black" onclick="finishEvent(${id}, 'black')">⚫ Черные</button>
-        <button onclick="closeModal()">Отмена</button>
-    `);
-}
-
-async function finishEvent(id, winner) {
-    await api(`/admin/events/${id}/finish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ winner })
-    });
-
-    closeModal();
-    document.getElementById(`event-${id}`)?.remove();
+    tg.close();
 }
 
 async function loadEvents() {
     const events = await api("/events");
+    const me = await api("/me");
+
     const container = document.getElementById("events");
     container.innerHTML = "";
 
     for (const e of events) {
         const card = document.createElement("div");
         card.className = "card";
-        card.id = `event-${e.id}`;
 
         card.innerHTML = `
-            <div class="event-head" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                <b>${e.title}</b>
-                ${IS_ADMIN ? `<button class="gear" style="width:auto; padding:6px 10px;" onclick="openOddsModal(${e.id}, ${e.red_odds}, ${e.black_odds})">⚙️</button>` : ""}
-            </div>
+            <b>${e.title}</b>
             <div>⏱ ${Math.floor(e.time_left / 60)}:${String(e.time_left % 60).padStart(2, "0")}</div>
-            <button class="red">🔴 x${e.red_odds}</button>
-            <button class="black">⚫ x${e.black_odds}</button>
-            ${IS_ADMIN ? `<button class="admin" onclick="openFinishModal(${e.id})">Завершить</button>` : ""}
+
+            <button class="red bet-btn">🔴 x${e.red_odds}</button>
+            <button class="black bet-btn">⚫ x${e.black_odds}</button>
         `;
+
+        const [redBtn, blackBtn] = card.querySelectorAll(".bet-btn");
+
+        redBtn.onclick = () =>
+            placeBet(e.id, "red", e.red_odds, e.title, me.balance);
+
+        blackBtn.onclick = () =>
+            placeBet(e.id, "black", e.black_odds, e.title, me.balance);
 
         container.appendChild(card);
     }
@@ -170,5 +111,4 @@ async function loadEvents() {
 
 loadMe();
 loadEvents();
-setInterval(loadMe, 2000);
 setInterval(loadEvents, 2000);

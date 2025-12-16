@@ -232,3 +232,51 @@ async def change_odds(
         await session.commit()
 
     return {"ok": True}
+
+@app.post("/bet")
+async def web_bet(
+    payload: dict,
+    tg_init_data: Optional[str] = Header(None, alias="X-Telegram-Init-Data")
+):
+    settings = context.settings
+    data = verify_init_data(tg_init_data, settings.bot_token)
+    user_data = json.loads(data["user"])
+    tg_id = int(user_data["id"])
+
+    event_id = int(payload.get("event_id"))
+    side = payload.get("side")
+
+    if side not in ("red", "black"):
+        raise HTTPException(status_code=400)
+
+    async with get_session()() as session:
+        user = await session.scalar(select(User).where(User.tg_id == tg_id))
+        event = await session.get(Event, event_id)
+
+        if not user or not event or not event.is_betting_active():
+            raise HTTPException(status_code=400)
+
+        odds = event.red_odds if side == "red" else event.black_odds
+        side_name = "Красных 🔴" if side == "red" else "Черных ⚫"
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text=f"Подтвердить ставку",
+                callback_data=f"bet_{side}:{event_id}"
+            )
+        ]]
+    )
+
+    await context.bot.send_message(
+        tg_id,
+        f"💣 <b>Значит ты за Мафию?</b> 💣\n\n"
+        f"📌 Событие: <b>{event.event_title}</b>\n"
+        f"🎯 Ставка на: <b>{side_name}</b>\n"
+        f"📈 Коэффициент: <b>{odds}x</b>\n\n"
+        f"💳 Ваш баланс: <b>{user.balance}</b>\n\n"
+        f"💰 <b>Введите сумму ставки:</b>",
+        reply_markup=keyboard
+    )
+
+    return {"ok": True}

@@ -7,29 +7,91 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <style>
-        body { margin:0; font-family:system-ui; background:#0f172a; color:#e5e7eb }
-        header { padding:16px; background:#020617; text-align:center; font-weight:bold }
-        .container { padding:16px; max-width:520px; margin:auto }
-        .card { background:#020617; border-radius:12px; padding:14px; margin-bottom:14px }
-        button { width:100%; padding:10px; border-radius:8px; border:none; margin-top:8px }
-        .red { background:#b91c1c; color:#fff }
-        .black { background:#111827; color:#fff; border:1px solid #374151 }
-        .admin { background:#2563eb; color:#fff }
-        input { width:100%; padding:10px; border-radius:8px; border:none; margin-top:8px }
+        body {
+            margin: 0;
+            font-family: system-ui;
+            background: #0f172a;
+            color: #e5e7eb;
+        }
+
+        header {
+            padding: 16px;
+            background: #020617;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .container {
+            padding: 16px;
+            max-width: 520px;
+            margin: auto;
+        }
+
+        .card {
+            background: #020617;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            margin-top: 8px;
+            font-size: 15px;
+        }
+
+        .red {
+            background: #b91c1c;
+            color: #fff;
+        }
+
+        .black {
+            background: #111827;
+            color: #fff;
+            border: 1px solid #374151;
+        }
+
+        .admin {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            margin-top: 8px;
+            font-size: 16px;
+        }
+
+        .bet-btn {
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .bet-btn:hover {
+            transform: scale(1.03);
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+        }
 
         #modal {
-            display:none;
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,.6);
-            z-index:1000;
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.6);
+            z-index: 1000;
         }
+
         #modal-content {
-            background:#020617;
-            padding:16px;
-            border-radius:12px;
-            max-width:400px;
-            margin:30% auto;
+            background: #020617;
+            padding: 16px;
+            border-radius: 12px;
+            max-width: 400px;
+            margin: 30% auto;
         }
     </style>
 </head>
@@ -51,6 +113,6 @@
     <div id="modal-content"></div>
 </div>
 
-<script src="/static/app.js?v=37"></script>
+<script src="/static/app.js?v=38"></script>
 </body>
 </html>
