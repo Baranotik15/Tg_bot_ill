@@ -351,5 +351,7 @@ _______________________________
 ## *Сделай ставку. Выбери сторону. Забери все.*
 
 </div>
-Example of an application and a bot:
-<img width="1480" height="997" alt="image" src="https://github.com/user-attachments/assets/ae34567a-c73d-4133-8bc3-bc3e4cbb7645" />
+# Example of the Application and Telegram Bot
+
+<img width="1480" height="997" alt="image" src="https://github.com/user-attachments/assets/e3466fa7-1ff6-402b-9c77-b3bd663824b1" />
+
