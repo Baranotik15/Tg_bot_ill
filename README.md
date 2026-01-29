@@ -351,7 +351,13 @@ _______________________________
 ## *Сделай ставку. Выбери сторону. Забери все.*
 
 </div>
-# Example of the Application and Telegram Bot
 
-<img width="1480" height="997" alt="image" src="https://github.com/user-attachments/assets/e3466fa7-1ff6-402b-9c77-b3bd663824b1" />
+<div align="center">
+
+<h1>Example of the Application and Telegram Bot</h1>
+
+<img width="800" src="https://github.com/user-attachments/assets/e3466fa7-1ff6-402b-9c77-b3bd663824b1" />
+
+</div>
+
 
