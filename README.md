@@ -348,7 +348,8 @@ _______________________________
 <div align="center">
 
 # **🎭 Добро пожаловать в игру. Мафия просыпаеться. 🎭**
-
 ## *Сделай ставку. Выбери сторону. Забери все.*
 
 </div>
+Example of an application and a bot:
+<img width="1480" height="997" alt="image" src="https://github.com/user-attachments/assets/ae34567a-c73d-4133-8bc3-bc3e4cbb7645" />
